@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stop Signal</title>
+<meta name="description" content="Watch an AI agent decide when to stop, token by token, with a score read from inside the model.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0c0e'/%3E%3Ccircle cx='12' cy='16' r='5' fill='%232a78d6'/%3E%3Ccircle cx='21' cy='16' r='5' fill='%23eb6834'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f7f7f8; --surface:#ffffff; --raised:#fbfbfc; --ink:#0b0c0e; --ink2:#5d6470; --ink3:#8b919c; --line:#e6e7eb; --line2:#eff0f2;
+  --stop:235,104,52; --go:42,120,214; --ok:#16a34a; --warn:#d97706;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:14px; --shadow:0 1px 2px rgba(16,18,24,.04),0 1px 1px rgba(16,18,24,.02);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b0c0e; --surface:#131518; --raised:#17191d; --ink:#f3f4f6; --ink2:#a2a8b3; --ink3:#737a86; --line:#24272c; --line2:#1c1f23;
+  --stop:244,128,76; --go:86,154,238; --ok:#4ade80; --warn:#fbbf24; --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0c0e; --surface:#131518; --raised:#17191d; --ink:#f3f4f6; --ink2:#a2a8b3; --ink3:#737a86; --line:#24272c; --line2:#1c1f23;
+  --stop:244,128,76; --go:86,154,238; --ok:#4ade80; --warn:#fbbf24; --shadow:none; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:150px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:6px}
+[hidden]{display:none!important}
+
+/* top bar */
+.bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line)}
+.bar>div{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em;font-size:15.5px}
+.mark{display:inline-flex}.mark i{width:11px;height:11px;border-radius:50%;display:block}.mark i:first-child{background:rgb(var(--go))}.mark i:last-child{background:rgb(var(--stop));margin-left:-3px;mix-blend-mode:multiply}
+@media (prefers-color-scheme: dark){.mark i:last-child{mix-blend-mode:screen}}
+.tag{color:var(--ink3);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--ink2);border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ink3)}
+.chip.live .dot{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}
+.chip.busy .dot{background:var(--warn);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* layout */
+.shell{max-width:1180px;margin:0 auto;padding:22px 20px 90px;display:grid;grid-template-columns:330px minmax(0,1fr);gap:26px;align-items:start}
+.side{position:sticky;top:70px;display:flex;flex-direction:column;gap:14px}
+.main{min-width:0;display:flex;flex-direction:column;gap:14px}
+@media (max-width:900px){.shell{display:flex;flex-direction:column;gap:14px;padding:16px 14px 90px}.side{position:static;order:1}.main{display:contents}.intro{order:0}.hud{order:2}.feed{order:3}.tag{display:none}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:16px}
+.label{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:0 0 10px}
+.muted{color:var(--ink2)} .small{font-size:13px} .tiny{font-size:12px;color:var(--ink3);line-height:1.45}
+
+/* task picker */
+.kinds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kind{appearance:none;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 11px;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:border-color .12s,background .12s}
+.kind b{font-weight:600;font-size:13.5px;letter-spacing:-.005em}.kind span{font-size:12px;color:var(--ink3);line-height:1.35}
+.kind:hover{border-color:var(--ink3)}
+.kind[aria-pressed="true"]{border-color:var(--ink);background:var(--surface);box-shadow:inset 0 0 0 1px var(--ink)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--raised)}
+.stepper button{appearance:none;border:0;background:transparent;width:32px;height:32px;cursor:pointer;font-size:17px;line-height:1;color:var(--ink2)}
+.stepper button:hover:not(:disabled){background:var(--line2);color:var(--ink)}
+.stepper output{min-width:118px;text-align:center;font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums}
+
+/* dial */
+.dialhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+.dialval{font-weight:600;font-size:14px;letter-spacing:-.005em}
+.link{appearance:none;border:0;background:none;padding:0;color:var(--ink3);font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.link:hover{color:var(--ink)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--stop),.9),rgba(var(--stop),.18) 46%,var(--line) 50%,rgba(var(--go),.18) 54%,rgba(var(--go),.9))}
+input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--stop),.9),rgba(var(--stop),.18) 46%,var(--line) 50%,rgba(var(--go),.18) 54%,rgba(var(--go),.9))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);margin-top:-7px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+input[type=range]:disabled{opacity:.5;cursor:default}
+.ends{display:flex;justify-content:space-between;font-size:12px;color:var(--ink3);margin-top:4px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--line2);border-radius:10px;padding:4px}
+.seg button{appearance:none;border:0;background:transparent;border-radius:7px;padding:7px 6px;font-size:13px;font-weight:500;color:var(--ink2);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+details.adv{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
+details.adv summary{cursor:pointer;font-size:12.5px;color:var(--ink2);list-style:none;display:flex;align-items:center;gap:6px}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary::before{content:"›";display:inline-block;transition:transform .15s;font-size:15px;line-height:1}
+details.adv[open] summary::before{transform:rotate(90deg)}
+select{background:var(--raised);border:1px solid var(--line);border-radius:9px;padding:7px 9px;width:100%;font-size:13.5px}
+
+/* run button */
+.go{appearance:none;width:100%;border:0;border-radius:11px;padding:12px 14px;font-weight:600;font-size:15px;cursor:pointer;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .06s,opacity .12s}
+.go:active{transform:scale(.985)} .go:disabled{opacity:.45;cursor:default}
+.go.stop{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.status{font-size:12.5px;color:var(--ink2);min-height:1.5em;margin-top:9px;text-align:center}
+.unlock{display:flex;gap:8px;margin-top:10px}
+.unlock input{flex:1;min-width:0;background:var(--raised);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px}
+.unlock button{appearance:none;border:1px solid var(--ink);background:var(--surface);border-radius:9px;padding:8px 13px;font-weight:600;font-size:13.5px;cursor:pointer}
+
+/* hud */
+.hud{position:sticky;top:57px;z-index:10;padding:13px 16px;display:flex;flex-direction:column;gap:10px}
+.hudtop{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.title{display:flex;flex-direction:column;min-width:0;flex:1}
+.title b{font-size:16px;font-weight:650;letter-spacing:-.01em}
+.title span{font-size:13px;color:var(--ink2)}
+.id{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+.gauge{display:flex;align-items:center;gap:10px}
+.gauge .num{font:600 22px/1 var(--mono);font-variant-numeric:tabular-nums;min-width:3.1ch;text-align:right;letter-spacing:-.02em}
+.gbar{position:relative;width:132px;height:8px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--go),.85),rgba(var(--go),.15) 47%,rgba(var(--stop),.15) 53%,rgba(var(--stop),.9))}
+.gbar i{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--ink);left:50%;transform:translateX(-50%);transition:left .12s linear;box-shadow:0 0 0 2px var(--surface)}
+.glabels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-top:3px;letter-spacing:.02em}
+.strip{display:flex;gap:3px;height:16px}
+.part{display:flex;border-radius:4px;overflow:hidden;background:var(--line2);min-width:4px;cursor:pointer}
+.part i{flex:1 1 0;min-width:0}
+.part.final{outline:1.5px solid var(--ink);outline-offset:1px}
+
+/* transcript */
+.intro h1{font-size:26px;line-height:1.2;letter-spacing:-.022em;margin:0 0 8px;font-weight:700;text-wrap:balance}
+.intro p{margin:0;color:var(--ink2);max-width:62ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:13px;color:var(--ink2)}
+.sw{display:inline-block;width:22px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+.sw.s{background:rgba(var(--stop),.85)} .sw.g{background:rgba(var(--go),.8)}
+.feed{display:flex;flex-direction:column;gap:10px}
+.msg{padding:13px 15px;min-width:0}
+.who{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px}
+.who .tool{font-family:var(--mono);text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--ink2);background:var(--line2);border-radius:6px;padding:1px 7px}
+.msg.agent{margin-right:7%} .msg.result{margin-left:7%;background:var(--raised)} .msg.user{background:var(--raised)}
+.msg.final{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+@media (max-width:640px){.msg.agent{margin-right:0}.msg.result{margin-left:0}}
+.plain{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px}
+.tok{font:12.5px/1.95 var(--mono);white-space:break-spaces;overflow-wrap:anywhere;min-height:1.95em}
+.tok span{border-radius:4px;padding:2.5px 0}
+.tok.writing::after{content:"";display:inline-block;width:6px;height:1.05em;margin-left:2px;vertical-align:-2px;background:var(--ink);border-radius:1px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.clamp{max-height:238px;overflow:hidden;position:relative}  /* shows the end of a long result, where the evidence is */
+.clamp::before{content:"";position:sticky;display:block;top:0;height:40px;margin-bottom:-40px;background:linear-gradient(var(--raised),transparent);pointer-events:none;z-index:1}
+.more{appearance:none;border:0;background:none;color:var(--ink2);font-size:12.5px;font-weight:500;cursor:pointer;padding:6px 0 0;text-decoration:underline;text-underline-offset:2px}
+.decide{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink2);padding:1px 4px}
+.decide::before{content:"";width:14px;height:1px;background:var(--line)}
+.pill{font:500 12px/1.6 var(--mono);border-radius:999px;padding:0 9px;color:var(--ink);font-variant-numeric:tabular-nums;background:var(--line2)}
+.truth{font-size:12px;color:var(--ink3)}
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);overflow:hidden}
+.sum div{background:var(--surface);padding:13px 15px;display:flex;flex-direction:column;gap:2px}
+.sum b{font-size:17px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.sum span{font-size:12px;color:var(--ink3)}
+@media (max-width:640px){.sum{grid-template-columns:1fr 1fr}}
+.jump{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;appearance:none;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:600;font-size:13px;padding:9px 16px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+footer{max-width:1180px;margin:0 auto;padding:0 20px 34px;font-size:12px;color:var(--ink3)}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="bar"><div>
+  <span class="brand"><span class="mark"><i></i><i></i></span>Stop Signal</span>
+  <span class="tag">watching an agent decide when to stop</span>
+  <span class="chip" id="chip"><span class="dot"></span><span id="chiptext">connecting</span></span>
+</div></div>
+
+<div class="shell">
+  <aside class="side">
+    <div class="card pad">
+      <p class="label">Task</p>
+      <div class="kinds" id="kinds"></div>
+      <div class="row" style="margin-top:12px">
+        <span class="small muted">Size</span>
+        <span class="stepper"><button id="less" aria-label="Smaller">−</button><output id="size"></output><button id="more" aria-label="Larger">+</button></span>
+      </div>
+    </div>
+
+    <div class="card pad">
+      <div class="dialhead"><p class="label" style="margin:0">Push</p><span class="dialval" id="dialval">Neutral</span></div>
+      <div id="dial-live">
+        <input type="range" id="push" min="-2" max="2" step="0.25" value="0" aria-label="Push the agent to stop sooner or keep going">
+        <div class="ends"><span>stop sooner</span><button class="link" id="reset" hidden>reset</button><span>keep going</span></div>
+        <details class="adv"><summary>How the push is applied</summary>
+          <div style="margin-top:9px"><select id="where" aria-label="Where the push is applied"><option value="all">At every token the agent writes</option><option value="start">Only at the first token of each turn</option></select></div>
+          <p class="tiny" style="margin:9px 0 0">It adds one direction to the model's layer 23. 1× is the gap between an average stop turn and an average tool-call turn. On eight test tasks needing six tool calls, the agent made 5.8 with no push, 3.2 at 1× stop sooner, 0.5 at 2×, and 11.6 at 1× keep going.</p>
+        </details>
+      </div>
+      <div id="dial-replay" hidden>
+        <div class="seg" id="seg" role="group" aria-label="Recorded push settings"></div>
+        <p class="tiny" style="margin:10px 0 0">Recorded runs come at three settings, picked as clear examples. Live runs use a fresh task and the full dial, and vary more.</p>
+      </div>
+    </div>
+
+    <div class="card pad">
+      <button class="go" id="run" disabled>Run</button>
+      <div class="status" id="status" role="status" aria-live="polite">connecting…</div>
+      <div id="lock" hidden>
+        <p class="tiny" style="margin:12px 0 0">You are watching recorded runs. With a passcode the agent runs live on a GPU, on a fresh task each time.</p>
+        <form class="unlock" id="unlock"><input type="password" id="key" placeholder="Passcode" autocomplete="off" aria-label="Passcode"><button>Unlock</button></form>
+      </div>
+      <div id="golive" hidden><p class="tiny" style="margin:10px 0 0;text-align:center"><button class="link" id="backlive">Back to live mode</button></p></div>
+      <div id="unlocked" hidden><p class="tiny" style="margin:10px 0 0;text-align:center">Live mode. <button class="link" id="replaymode">Watch recorded runs instead</button> · <button class="link" id="forget">forget passcode</button></p></div>
+      <div id="speedrow" class="row" style="margin-top:10px" hidden><span class="tiny">Replay speed</span><div class="seg" id="speed" style="width:150px"><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button><button data-v="4">4×</button></div></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="card pad intro" id="intro">
+      <h1>Watch an AI agent decide when to stop</h1>
+      <p>An agent (Qwen3-4B) gets a small job and a set of tools. It calls one tool at a time, reads each result, and at some point writes a final answer. Every word is coloured by a score read from inside the model at that moment.</p>
+      <div class="legend"><span><span class="sw g"></span>blue: its next turn will call another tool</span><span><span class="sw s"></span>orange: its next turn will be the final answer</span></div>
+    </section>
+    <section class="card hud" id="hud" hidden>
+      <div class="hudtop">
+        <div class="title"><b id="t-name"></b><span id="t-sub"></span></div>
+        <div>
+          <div class="gauge"><div><div class="gbar"><i id="needle"></i></div><div class="glabels"><span>tool call</span><span>stop</span></div></div><span class="num" id="now">–</span></div>
+        </div>
+      </div>
+      <div class="strip" id="strip" title="The whole run, one block per turn. Click a block to jump to it."></div>
+    </section>
+    <div class="feed" id="feed"></div>
+  </main>
+</div>
+<button class="jump" id="jump" hidden>Jump to latest ↓</button>
+<footer>Qwen3-4B with four real tools on a generated workspace. The score is a linear read-out at layer 24, averaged over the last four tokens. Research demo.</footer>
+
+<script>
+// Where the live agent is. On this machine's own server the page talks to the same origin; anywhere
+// else it talks to the hosted endpoint, which needs a passcode.
+const QS = new URLSearchParams(location.search), ON_THIS_MACHINE = ["localhost", "127.0.0.1"].includes(location.hostname);
+// For testing from this machine: ?hosted behaves like the public page; ?api=<url> points it at another server.
+const REMOTE = (ON_THIS_MACHINE && QS.get("api")) || "https://penumbra-dev--stop-signal-live-web.us-east.modal.run";
+const LOCAL = ON_THIS_MACHINE && !QS.has("hosted") && !QS.has("api");
+const $ = id => document.getElementById(id);
+const KINDS = {
+  batch:   {name: "Listed files",  blurb: "Read the files named in the request", title: "Read the files I listed",       size: n => `${n} files`},
+  dirscan: {name: "Whole folder",  blurb: "Read every file in a folder",          title: "Read every file in a folder",  size: n => `${n - 1} file${n === 2 ? "" : "s"} in the folder`},
+  chain:   {name: "Config chain",  blurb: "Follow links from file to file",       title: "Follow a chain of configs",    size: n => `chain of ${n} files`},
+  fix:     {name: "Failing tests", blurb: "Fix bugs until the tests pass",        title: "Fix the failing tests",        size: n => `${n} bug${n === 1 ? "" : "s"}`},
+};
+const ENDS = {finished: "Finished the work, then stopped", plan: "Announced a next step and stopped", early: "Answered with work left", cap: "Never stopped"};
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const color = p => p >= .5 ? `rgba(var(--stop),${Math.min(.92, (p - .5) * 2.1 + .07).toFixed(2)})` : `rgba(var(--go),${Math.min(.88, (.5 - p) * 1.9 + .05).toFixed(2)})`;
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const pushText = v => v === 0 ? "Neutral" : `${Math.abs(v)}× ${v > 0 ? "keep going" : "stop sooner"}`;
+
+const S = {mode: "connecting", key: null, sizes: {batch: [2, 12], dirscan: [2, 12], chain: [2, 12], fix: [1, 4]}, kind: "batch",
+           size: {batch: 4, dirscan: 5, chain: 4, fix: 2}, push: 0, running: false, abort: null, runId: null, lib: null, speed: 1, info: {}};
+let queue = [], cur = null, fast = false, follow = true, lastFrame = 0, replayTimer = null;
+
+// ---------------------------------------------------------------- talking to the server
+const base = () => S.mode === "local" ? "" : REMOTE;
+const headers = () => S.key ? {Authorization: "Bearer " + S.key} : {};
+async function getJSON(path, key) {
+  const r = await fetch((LOCAL ? "" : REMOTE) + path, {headers: key ? {Authorization: "Bearer " + key} : {}, cache: "no-store"});
+  if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), {status: r.status});
+  return r.json();
+}
+async function connect() {
+  if (LOCAL) {
+    try { const s = await getJSON("/api/status"); if (s.sizes) S.sizes = s.sizes; S.info = s; setMode(s.state === "ready" ? "local" : "waking"); if (s.state !== "ready") setTimeout(connect, 1500); return; }
+    catch (e) { /* no local server: fall through to recorded runs */ }
+  } else if (REMOTE) {
+    const saved = (() => { try { return localStorage.getItem("stop-signal-key"); } catch (e) { return null; } })();
+    if (saved && await tryKey(saved)) return;
+  }
+  setMode("replay");
+}
+async function tryKey(key) {
+  try { const s = await getJSON("/api/check", key); S.key = key; if (s.sizes) S.sizes = s.sizes; S.info = s; try { localStorage.setItem("stop-signal-key", key); } catch (e) {} setMode("remote"); return true; }
+  catch (e) { return false; }
+}
+async function library() {
+  if (!S.lib) { try { S.lib = (await (await fetch("runs.json", {cache: "no-store"})).json()).runs; } catch (e) { S.lib = []; } }
+  return S.lib;
+}
+
+// ---------------------------------------------------------------- controls
+function setMode(mode) {
+  S.mode = mode;
+  const live = mode === "local" || mode === "remote", chip = $("chip");
+  chip.className = "chip" + (live ? " live" : mode === "waking" ? " busy" : "");
+  $("chiptext").textContent = mode === "local" ? `Live · ${S.info.gpu || "GPU"}` : mode === "remote" ? "Live · GPU on demand" : mode === "waking" ? "Starting the GPU" : mode === "replay" ? "Recorded runs" : "Connecting";
+  $("dial-live").hidden = !live; $("dial-replay").hidden = live || mode !== "replay";
+  $("lock").hidden = !(mode === "replay" && !LOCAL && REMOTE && !S.key); $("golive").hidden = !(mode === "replay" && S.key);
+  $("unlocked").hidden = mode !== "remote"; $("speedrow").hidden = mode !== "replay";
+  if (mode === "replay") library().then(() => { syncReplay(); render(); });
+  render();
+}
+function render() {
+  const live = S.mode === "local" || S.mode === "remote", k = S.kind, [lo, hi] = S.sizes[k];
+  document.querySelectorAll(".kind").forEach(b => { b.setAttribute("aria-pressed", b.dataset.k === k); b.disabled = S.running; });
+  let n = Math.min(hi, Math.max(lo, S.size[k]));
+  if (S.mode === "replay" && S.lib) { const r = S.lib.find(r => r.type === k); if (r) n = r.length; }
+  S.size[k] = n;
+  $("size").textContent = KINDS[k].size(n);
+  $("less").disabled = S.running || !live || n <= lo; $("more").disabled = S.running || !live || n >= hi;
+  $("push").disabled = $("where").disabled = S.running; $("push").value = S.push;
+  $("dialval").textContent = pushText(S.push); $("reset").hidden = S.push === 0 || S.running;
+  document.querySelectorAll("#seg button").forEach(b => { b.setAttribute("aria-pressed", +b.dataset.v === S.push); b.disabled = S.running; });
+  const run = $("run");
+  run.className = "go" + (S.running ? " stop" : ""); run.textContent = S.running ? "Stop" : S.mode === "replay" ? "Play recorded run" : "Run";
+  run.disabled = !(S.running || live || (S.mode === "replay" && S.lib && S.lib.length));
+  if (!S.running && !cur) status(live ? (S.mode === "remote" ? "A fresh task each time. The first run may wait a minute for the GPU." : "Ready. A fresh task each time.")
+    : S.mode === "replay" ? (S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
+}
+function syncReplay() {  // the dial settings that exist for the chosen task
+  const opts = [...new Set((S.lib || []).filter(r => r.type === S.kind).map(r => r.push))].sort((a, b) => a - b);
+  if (!opts.includes(S.push)) S.push = opts.includes(0) ? 0 : (opts[0] ?? 0);
+  $("seg").innerHTML = opts.map(v => `<button data-v="${v}">${v === 0 ? "Neutral" : v < 0 ? "Stop sooner" : "Keep going"}</button>`).join("");
+}
+const status = s => { $("status").textContent = s; };
+$("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="kind" data-k="${k}"><b>${v.name}</b><span>${v.blurb}</span></button>`).join("");
+$("kinds").onclick = e => { const b = e.target.closest(".kind"); if (!b || S.running) return; S.kind = b.dataset.k; if (S.mode === "replay") syncReplay(); render(); };
+$("less").onclick = () => { S.size[S.kind]--; render(); }; $("more").onclick = () => { S.size[S.kind]++; render(); };
+$("push").oninput = e => { S.push = +e.target.value; render(); };
+$("reset").onclick = () => { S.push = 0; render(); };
+$("seg").onclick = e => { const b = e.target.closest("button"); if (b && !S.running) { S.push = +b.dataset.v; render(); } };
+$("speed").onclick = e => { const b = e.target.closest("button"); if (!b) return; S.speed = +b.dataset.v; document.querySelectorAll("#speed button").forEach(x => x.setAttribute("aria-pressed", x === b)); };
+$("unlock").onsubmit = async e => { e.preventDefault(); const k = $("key").value.trim(); if (!k) return; status("Checking…"); if (!(await tryKey(k))) { status("That passcode was not accepted."); $("key").select(); } else $("key").value = ""; };
+$("forget").onclick = () => { try { localStorage.removeItem("stop-signal-key"); } catch (e) {} S.key = null; setMode("replay"); };
+$("replaymode").onclick = () => setMode("replay");
+$("backlive").onclick = () => setMode("remote");
+
+// ---------------------------------------------------------------- drawing a run
+function addTok(s, p) {
+  const span = el("span"); span.dataset.p = p; span.style.background = color(p); span.textContent = s.replace(/\n/g, "↵\n");
+  cur.box.appendChild(span);
+  const i = el("i"); i.style.background = color(p); cur.part.appendChild(i); cur.part.style.flex = `${cur.part.childElementCount} 1 0`;
+  $("now").textContent = p.toFixed(2); $("needle").style.left = (4 + p * 92) + "%";
+  if (cur.clamp && cur.box.scrollHeight > 250 && !cur.box.dataset.open) {
+    cur.box.classList.add("clamp"); cur.box.scrollTop = cur.box.scrollHeight;
+    if (!cur.moreBtn) {
+      const b = el("button", "more", "Show all"), box = cur.box;
+      b.onclick = () => { const clamped = box.classList.toggle("clamp"); box.dataset.open = clamped ? "" : "1"; b.textContent = clamped ? "Show all" : "Show less"; if (clamped) box.scrollTop = box.scrollHeight; };
+      box.after(b); cur.moreBtn = b;
+    }
+  }
+}
+function settle(text) { if (cur && cur.pending) { cur.pending.textContent = text; cur.pending = null; } }
+const H = {
+  queued() { status("Waiting for the GPU…"); },
+  start(e) {
+    $("feed").innerHTML = ""; $("strip").innerHTML = ""; $("intro").hidden = true; $("hud").hidden = false;
+    cur = {id: e.id, step: null, box: null, part: null, pending: null, n: 0,
+           push: e.push ? `Pushed ${pushText(e.push).toLowerCase()}${e.every_token ? "" : ", first token only"}.` : ""};
+    $("t-name").textContent = KINDS[e.type].title;
+    $("t-sub").innerHTML = `<span id="outcome">${S.mode === "replay" ? "Replaying a recorded run." : "Running now."}</span> ${esc(cur.push)} <span class="id">${esc(e.id)}</span>`;
+    $("now").textContent = "–"; $("needle").style.left = "50%";
+    $("feed").appendChild(el("div", "card msg user", `<div class="who">Request</div><div class="plain">${esc(e.request)}</div>`));
+    status(S.mode === "replay" ? "Replaying…" : "The agent is working…");
+  },
+  decide(e) {
+    const row = el("div", "decide", `<span>${e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill" style="background:${color(e.p)}">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.truth.done ? "the work is in fact done" : "work in fact remains"}</span>`);
+    $("feed").appendChild(row); cur.pending = row.querySelector(".what");
+  },
+  turn(e) {
+    const id = "turn" + e.turn, block = el("div", "card msg agent", `<div class="who">Agent · turn ${e.turn + 1}</div><div class="tok writing"></div>`);
+    block.id = id; $("feed").appendChild(block);
+    cur.block = block; cur.box = block.querySelector(".tok"); cur.clamp = false; cur.moreBtn = null;
+    cur.part = el("div", "part"); cur.part.dataset.s = id; cur.part.style.flex = "1 1 0"; $("strip").appendChild(cur.part);
+  },
+  tok(e) { addTok(e.s, e.p); return 1; },
+  endturn(e) {
+    cur.box.classList.remove("writing");
+    if (e.next === "stop") {
+      settle("→ it stops");
+      cur.block.classList.add("final"); cur.block.querySelector(".who").textContent = "Agent · final answer"; cur.part.classList.add("final");
+    } else {
+      settle("→ it calls another tool");
+      const block = el("div", "card msg result", `<div class="who">Tool result <span class="tool">${esc(e.tool)}</span></div><div class="tok"></div>`);
+      $("feed").appendChild(block); cur.box = block.querySelector(".tok"); cur.clamp = true; cur.moreBtn = null;
+    }
+  },
+  result(e) { queue.unshift(...e.toks.map(t => ({t: "rtok", s: t[0], p: t[1]}))); },
+  rtok(e) { addTok(e.s, e.p); return 1; },
+  done(e) {
+    settle("the turn limit was reached");
+    if (e.end === "cap" && cur.box && !cur.box.childElementCount) cur.box.textContent = "(the turn limit was reached before the agent read this result)";
+    const verdict = e.end === "cap" ? "Hit the turn limit" : e.end !== "finished" ? "Work was left undone" : e.correct ? "Right answer" : "Wrong answer";
+    $("outcome").textContent = ENDS[e.end] + ".";
+    $("feed").appendChild(el("div", "card sum", `<div><b>${ENDS[e.end].split(",")[0]}</b><span>how it ended</span></div><div><b>${verdict}</b><span>checked by the harness</span></div><div><b>${e.calls} <span style="font-weight:400;font-size:13px">of ${e.needed} needed</span></b><span>tool calls</span></div><div><b>${e.seconds.toFixed(0)} s</b><span>${e.tps.toFixed(0)} tokens a second</span></div>`));
+    finish("Done.");
+  },
+  cancelled() { if (cur && cur.box) cur.box.classList.remove("writing"); settle("stopped by you"); const o = $("outcome"); if (o) o.textContent = "Stopped by you."; finish("Stopped."); },
+  error(e) { if (cur && cur.box) cur.box.classList.remove("writing"); finish(e.msg === "locked" ? "That passcode is no longer accepted." : "Something went wrong: " + e.msg); if (e.msg === "locked") $("forget").onclick(); },
+};
+function finish(text) { S.running = false; if (S.abort) { S.abort.abort(); S.abort = null; } if (replayTimer) { clearTimeout(replayTimer); replayTimer = null; } S.runId = null; render(); status(text); $("jump").hidden = true; }
+function drain(all) {
+  let words = 0, did = false;
+  while (queue.length && (all || words < 9)) { const e = queue.shift(); words += H[e.t](e) || 0; did = true; }
+  if (did && follow && S.running) window.scrollTo({top: document.documentElement.scrollHeight});
+}
+function frame() { lastFrame = performance.now(); drain(fast); requestAnimationFrame(frame); }
+setInterval(() => { if (performance.now() - lastFrame > 400) drain(true); }, 200);  // no frames lately: the page is not being shown
+
+// ---------------------------------------------------------------- running
+async function runLive() {
+  const q = new URLSearchParams({type: S.kind, length: S.size[S.kind], push: S.push, where: $("where").value});
+  S.abort = new AbortController();
+  try {
+    const r = await fetch(`${base()}/api/run?${q}`, {headers: headers(), signal: S.abort.signal, cache: "no-store"});
+    if (r.status === 401) return queue.push({t: "error", msg: "locked"});
+    if (!r.ok) return queue.push({t: "error", msg: (await r.json().catch(() => ({}))).error || "the server said " + r.status});
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (line.startsWith("data: ")) { const e = JSON.parse(line.slice(6)); if (e.run) S.runId = e.run; queue.push(e); }
+      }
+    }
+    if (S.running && !queue.some(e => ["done", "cancelled", "error"].includes(e.t))) queue.push({t: "error", msg: "the stream ended early"});
+  } catch (e) { if (S.running && e.name !== "AbortError") queue.push({t: "error", msg: "could not reach the server"}); }
+}
+function runReplay() {
+  const r = S.lib.find(r => r.type === S.kind && r.push === S.push) || S.lib.find(r => r.type === S.kind);
+  if (!r) return queue.push({t: "error", msg: "no recorded run for this setting"});
+  let i = 0;
+  const step = () => {
+    if (!S.running) return;
+    let wait = 0;
+    while (i < r.events.length && wait === 0) {
+      const e = r.events[i++]; queue.push(e);
+      if (e.t === "tok") wait = 1000 / 42 / S.speed; else if (e.t === "result") wait = e.toks.length * 4 / S.speed; else if (e.t === "endturn") wait = 220 / S.speed;
+    }
+    if (i < r.events.length) replayTimer = setTimeout(step, wait);
+  };
+  step();
+}
+$("run").onclick = () => {
+  if (S.running) { fast = true; status("Stopping…"); if (S.mode === "replay") { queue = []; queue.push({t: "cancelled"}); } else fetch(`${base()}/api/stop${S.runId ? "?run=" + S.runId : ""}`, {headers: headers()}).catch(() => {}); return; }
+  S.running = true; fast = false; follow = true; queue = []; cur = null; render(); status("Starting…");
+  if (S.mode === "replay") runReplay(); else runLive();
+};
+
+// ---------------------------------------------------------------- reading along
+document.addEventListener("mouseover", e => { const s = e.target.closest(".tok span"); if (s && !S.running) { $("now").textContent = (+s.dataset.p).toFixed(2); $("needle").style.left = (4 + s.dataset.p * 92) + "%"; } });
+$("strip").onclick = e => { const p = e.target.closest(".part"); if (p) { follow = false; $("jump").hidden = !S.running; $(p.dataset.s).scrollIntoView({behavior: "smooth", block: "start"}); } };
+window.addEventListener("wheel", e => { if (e.deltaY < 0 && S.running) { follow = false; $("jump").hidden = false; } }, {passive: true});
+window.addEventListener("touchmove", () => { if (S.running && window.innerHeight + window.scrollY < document.documentElement.scrollHeight - 80) { follow = false; $("jump").hidden = false; } }, {passive: true});
+$("jump").onclick = () => { follow = true; $("jump").hidden = true; window.scrollTo({top: document.documentElement.scrollHeight, behavior: "smooth"}); };
+
+render(); connect(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
