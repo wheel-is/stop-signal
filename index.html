@@ -85,6 +85,16 @@ p{margin:0}
 .choice:hover{border-color:color-mix(in oklab,var(--foreground) 25%,transparent)}
 .choice[aria-checked="true"]{border-color:var(--foreground);box-shadow:0 0 0 .5px var(--foreground)}
 .choice:disabled{cursor:default}
+.choice.off{opacity:.5}
+.choice.off .ring{visibility:hidden}
+.task{align-self:flex-start;max-width:min(100%,640px);border:1px solid var(--border);border-radius:14px;padding:12px 16px;font-size:13px;color:var(--muted-foreground)}
+.task b{color:var(--foreground);font-weight:500}
+.task ul{margin:8px 0 0;padding-left:18px}
+.task li{margin:2px 0}
+.task .said{margin-top:8px;white-space:pre-wrap;color:var(--foreground)}
+.user .lbl{display:block;margin-bottom:6px;opacity:.7}
+.user{white-space:pre-wrap}
+.more{opacity:.6;font-style:italic}
 .choice .ring{width:20px;height:20px;flex-shrink:0;border-radius:50%;border:1.5px solid color-mix(in oklab,var(--foreground) 28%,transparent)}
 .choice[aria-checked="true"] .ring{border:6px solid var(--foreground)}
 .choice b{display:block;font-size:14.5px;font-weight:500}
@@ -229,7 +239,7 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
         </div>
         <h2 class="lbl" id="task-label">Task</h2>
         <div class="choices" id="kinds" role="radiogroup" aria-labelledby="task-label"></div>
-        <div class="row" style="margin-top:16px">
+        <div class="row" id="sizerow" style="margin-top:16px">
           <span class="lbl">Size</span>
           <span class="stepper"><button class="btn secondary icon" id="less" aria-label="Smaller">−</button><output id="size"></output><button class="btn secondary icon" id="more" aria-label="Larger">+</button></span>
         </div>
@@ -305,21 +315,15 @@ const BOTS = {
     sizes: {batch: [2, 12], dirscan: [2, 12], chain: [2, 12], fix: [1, 4]}, size: {batch: 4, dirscan: 5, chain: 4, fix: 2}, kind: "batch", on: true,
   },
   trader: {
-    about: "A 27B model as a trading bot: a production bot runtime's own prompt, turn engine and tools, on a simulated paper account.",
-    foot: "Qwen3.8-27B in the bot's own turn engine, trading a simulated paper account with the real tools. The score is a linear read-out at layer 48, averaged over the last four tokens. Research demo.",
-    push: "It adds one direction to the model's layer 56, from the start of each response until the bot opens a tool call. 1× is the gap between an average stopping response and an average working one. On ten test tasks the bot took 5.7 working steps with no push; 5.6 at 1× stop sooner, 1.0 at 1.5× and none at 2×, where it answers at once with the work undone; 6.4 at 1× keep going and 7.2 at 2×. Below layer 44 the same push changes nothing.",
-    kinds: {
-      quotes:     {name: "Price a basket",   blurb: "Add up live asks for a few stocks",        title: "Price a basket",           size: n => `${n} stocks`},
-      orderchain: {name: "Amended order",    blurb: "Follow an order through its replacements", title: "Trace an amended order",   size: n => `replaced ${n} time${n === 1 ? "" : "s"}`},
-      notes:      {name: "Its own notes",    blurb: "Find a rule that moved between files",     title: "Find the current rule",    size: n => `${n} file${n === 1 ? "" : "s"} deep`},
-      buy:        {name: "Buy and confirm",  blurb: "Place an order, report the real fill",     title: "Buy and confirm the fill", size: n => n === 0 ? "fills at once" : n === 1 ? "fills by the first check" : `fills after ${n - 1} wait${n === 2 ? "" : "s"}`},
-      flatten:    {name: "Flatten the book", blurb: "Sell everything, confirm it is flat",      title: "Flatten the book",         size: n => n === 0 ? "fills at once" : n === 1 ? "fills by the first check" : `fills after ${n - 1} wait${n === 2 ? "" : "s"}`},
-    },
-    sizes: {quotes: [2, 8], orderchain: [1, 8], notes: [1, 8], buy: [0, 4], flatten: [0, 4]}, size: {quotes: 3, orderchain: 3, notes: 3, buy: 2, flatten: 1}, kind: "buy", on: false,
+    about: "A 27B model deployed from one of a trading product's own templates. It runs that product's first turn for a new bot: its prompt, its tools and its subagents, on a paper account.",
+    foot: "Qwen3.8-27B as a freshly deployed template bot, in the bot runtime's own turn engine. The score is a linear read-out at one layer, averaged over the last four tokens. Research demo.",
+    push: "It adds one direction to one late layer of the model, wherever the bot is choosing what to do next.",
+    kinds: {}, sizes: {}, size: {}, kind: null, on: false, templates: true,
   },
 };
 let KINDS = BOTS.pilot.kinds;  // the tasks of the agent that is selected
 const ENDS = {finished: "Finished the work, then stopped", plan: "Announced a next step and stopped", early: "Answered with work left", cap: "Never stopped"};
+const INIT_ENDS = {finished: "Put money on, then ended its turn", early: "Ended its turn with no money on", cap: "Reached the limit without ending"};
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 // A score as a tint of the theme's chart colours: amber toward stop, blue toward another tool call.
 // The words take whichever of the theme's inks reads best on that tint: light until the fill is
@@ -347,7 +351,18 @@ async function getJSON(path, key) {
 function offered(s) {  // the task sizes, and which agents this server runs
   if (s.sizes) BOTS.pilot.sizes = s.sizes;
   const j = s.bots && s.bots.trader;
-  if (j) { BOTS.trader.on = true; if (j.sizes) BOTS.trader.sizes = j.sizes; if (j.push) BOTS.trader.push = j.push; }
+  if (j) {
+    const T = BOTS.trader;
+    T.on = true; if (j.push) T.push = j.push;
+    if (Array.isArray(j.templates)) {  // the templates come with the passcode
+      T.kinds = {}; T.sizes = {}; T.size = {};
+      for (const t of j.templates) { T.kinds[t.slug] = {name: t.name, blurb: t.runnable ? t.prompt : `${t.prompt} · not here yet: ${t.why}`, title: t.name, size: () => "", off: !t.runnable}; T.sizes[t.slug] = [0, 0]; T.size[t.slug] = 0; }
+      if (!T.kind || !T.kinds[T.kind] || T.kinds[T.kind].off) T.kind = (j.templates.find(t => t.runnable) || {}).slug || null;
+      T.world = j.live_paper ? "Its tool calls are real: live search and news, and orders on a paper-trading account." : j.live_tools ? "Its search and news are live. Its paper account and prices are simulated." : j.simulated_prices ? "It works in a frozen snapshot: recorded search and news, simulated prices." : "";
+      T.foot = `Qwen3.8-27B as a freshly deployed template bot, in the bot runtime's own turn engine. ${T.world} The model and everything it writes run with no network. The score is a linear read-out at one layer, averaged over the last four tokens. Research demo.`;
+      if (S.bot === "trader") { S.kind = T.kind; setBot("trader"); }
+    }
+  }
   if (s.bots && !s.bots.pilot) BOTS.pilot.on = false;
   S.sizes = BOTS[S.bot].sizes;
   if (!BOTS[S.bot].on) setBot(BOTS.pilot.on ? "pilot" : "trader");
@@ -397,20 +412,22 @@ function paintDial() {  // the fill runs from the middle to the thumb, in the co
 function setBot(b) {
   BOTS[S.bot].kind = S.kind;
   S.bot = b; KINDS = BOTS[b].kinds; S.sizes = BOTS[b].sizes; S.size = BOTS[b].size; S.kind = BOTS[b].kind;
-  $("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="choice" type="button" role="radio" data-k="${k}"><span class="ring" aria-hidden="true"></span><span><b>${v.name}</b><small>${v.blurb}</small></span></button>`).join("");
+  $("task-label").textContent = BOTS[b].templates ? "Template" : "Task"; $("sizerow").hidden = !!BOTS[b].templates; $("where").hidden = !!BOTS[b].templates;
+  $("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="choice${v.off ? " off" : ""}" type="button" role="radio" data-k="${k}"${v.off ? " data-off" : ""}><span class="ring" aria-hidden="true"></span><span><b>${esc(v.name)}</b><small>${esc(v.blurb)}</small></span></button>`).join("")
+    || (BOTS[b].templates ? `<p class="note">Its templates appear once the passcode is entered.</p>` : "");
   if (S.mode === "replay") syncReplay();
 }
 function render() {
   const recorded = S.mode === "replay" && S.lib && S.lib.some(r => (r.bot || "pilot") === S.bot);
-  const live = S.mode === "local" || S.mode === "remote", k = S.kind, [lo, hi] = S.sizes[k];
+  const live = S.mode === "local" || S.mode === "remote", k = S.kind, [lo, hi] = S.sizes[k] || [0, 0], tpl = !!BOTS[S.bot].templates;
   document.querySelectorAll("#bots button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.bot); b.disabled = S.running; });
   $("botnote").textContent = BOTS[S.bot].about; $("pushnote").textContent = BOTS[S.bot].push; $("foot").textContent = BOTS[S.bot].foot;
   $("dial-replay").hidden = !recorded || live;
-  document.querySelectorAll(".choice").forEach(b => { b.setAttribute("aria-checked", b.dataset.k === k); b.disabled = S.running; });
-  let n = Math.min(hi, Math.max(lo, S.size[k]));
+  document.querySelectorAll(".choice").forEach(b => { b.setAttribute("aria-checked", b.dataset.k === k); b.disabled = S.running || "off" in b.dataset; });
+  let n = Math.min(hi, Math.max(lo, S.size[k] || 0));
   if (S.mode === "replay" && S.lib) { const r = S.lib.find(r => r.type === k && (r.bot || "pilot") === S.bot); if (r) n = r.length; }
-  S.size[k] = n;
-  $("size").textContent = KINDS[k].size(n);
+  if (k) S.size[k] = n;
+  $("size").textContent = k && KINDS[k] ? KINDS[k].size(n) : "";
   $("less").disabled = S.running || !live || n <= lo; $("more").disabled = S.running || !live || n >= hi;
   $("push").disabled = S.running; $("push").value = S.push;
   $("dialval").textContent = pushText(S.push); $("reset").hidden = S.push === 0 || S.running || !live; paintDial();
@@ -418,9 +435,9 @@ function render() {
   document.querySelectorAll("#where button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.where); b.disabled = S.running; });
   const run = $("run");
   run.className = "btn lg wide " + (S.running ? "outline" : "primary"); run.textContent = S.running ? "Stop" : S.mode === "replay" ? (recorded ? "Play recorded run" : "Run needs the passcode") : "Run";
-  run.disabled = !(S.running || live || recorded);
-  if (!S.running && !cur) status(live ? (S.mode === "remote" ? (S.bot === "trader" ? "A fresh task each time. The first run waits a few minutes for the GPU." : "A fresh task each time. The first run may wait a minute for the GPU.") : "Ready. A fresh task each time.")
-    : S.mode === "replay" ? (S.bot === "trader" ? "The trading bot runs live only, with the passcode." : S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
+  run.disabled = !(S.running || (live && k) || recorded);
+  if (!S.running && !cur) status(live ? (S.mode === "remote" ? (tpl ? `Deploys the template as a new bot. A run takes about ten minutes; the first waits two more for the GPU. ${BOTS[S.bot].world || ""}` : "A fresh task each time. The first run may wait a minute for the GPU.") : tpl ? `Ready. Deploys the template as a new bot. ${BOTS[S.bot].world || ""}` : "Ready. A fresh task each time.")
+    : S.mode === "replay" ? (tpl ? "This agent runs live only, with the passcode." : S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
 }
 function syncReplay() {  // the dial settings that exist for the chosen task
   const opts = [...new Set((S.lib || []).filter(r => r.type === S.kind && (r.bot || "pilot") === S.bot).map(r => r.push))].sort((a, b) => a - b);
@@ -461,19 +478,20 @@ function addTok(s, p) {
 function settle(text) { if (cur && cur.pending) { cur.pending.textContent = text; cur.pending = null; } }
 const isle = (cls, label) => el("div", "isle " + cls, `<div class="top"><i></i><i></i><i></i><span>${esc(label)}</span></div><pre class="tok"></pre>`);
 const H = {
-  queued() { status("Waiting for the GPU…"); },
+  queued() { status(BOTS[S.bot].templates ? "Waiting for the GPU. If it was asleep, it takes about two minutes to load the model…" : "Waiting for the GPU…"); },
   start(e) {
     $("feed").innerHTML = ""; $("strip").innerHTML = ""; $("intro").hidden = true; $("hud").hidden = false;
-    cur = {id: e.id, box: null, part: null, pending: null, bot: e.bot || "pilot",
+    cur = {id: e.id, box: null, part: null, pending: null, bot: e.bot || "pilot", init: !!e.init, tasks: {},
            push: e.push ? `Pushed ${pushText(e.push).toLowerCase()}${e.every_token ? "" : ", first token only"}.` : ""};
-    $("t-name").textContent = BOTS[cur.bot].kinds[e.type].title;
+    $("t-name").textContent = e.title || BOTS[cur.bot].kinds[e.type].title;
     $("t-sub").innerHTML = `<span id="outcome">${S.mode === "replay" ? "Replaying a recorded run." : "Running now."}</span> ${esc(cur.push)} <span class="id">${esc(e.id)}</span>`;
     $("now").textContent = "–"; $("needle").style.left = "50%";
-    $("feed").appendChild(el("div", "user", esc(e.request)));
-    status(S.mode === "replay" ? "Replaying…" : "The agent is working…");
+    $("feed").appendChild(el("div", "user", (e.init ? `<span class="lbl">The template's brief, which the new bot is given</span>` : "") + esc(e.request)));
+    status(S.mode === "replay" ? "Replaying…" : e.init ? "Deployed. It is reading its instructions…" : "The agent is working…");
   },
   decide(e) {
-    const row = el("div", "decide", `<span>${e.closing ? "Stop score when asked to close the turn" : e.woke ? "Stop score on waking" : e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.truth.done ? "· the work is in fact done" : "· work in fact remains"}</span>`);
+    const row = el("div", "decide", `<span>${e.closing ? "Stop score when asked to close the turn" : e.woke ? "Stop score on waking" : e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.state ? (e.state.positions ? `· ${e.state.positions} position${e.state.positions > 1 ? "s" : ""} on` : e.state.orders ? "· orders placed" : "· no money on yet") : e.truth.done ? "· the work is in fact done" : "· work in fact remains"}</span>`);
+    if (cur.init) status("The bot is working…");
     paint(row.querySelector(".pill"), e.p);
     $("feed").appendChild(row); cur.pending = row.querySelector(".what");
   },
@@ -486,7 +504,12 @@ const H = {
   tok(e) { addTok(e.s, e.p); return 1; },
   endturn(e) {
     cur.box.classList.remove("writing");
-    if (e.next === "stop") {  // not a tool call after all: it is speech, so it leaves the editor card
+    if (cur.init) {  // a template bot ends its turn with a tool call of its own, and may write to its user in any response
+      const names = (e.tools || []).filter(t => t !== "no_action" && t !== "sleep");
+      settle(e.next === "stop" || e.next === "sleep" ? (names.length ? `→ it calls ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}, then ends its turn` : "→ it ends its turn")
+        : e.next === "talk" ? "→ it writes to its user and calls nothing" : `→ it calls ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`);
+      if (e.next === "stop" || e.next === "sleep") cur.part.classList.add("final");
+    } else if (e.next === "stop") {  // not a tool call after all: it is speech, so it leaves the editor card
       settle("→ it stops");
       const said = el("div", "answer", `<span class="lbl">Final answer</span>`), box = cur.box;
       box.className = "tok"; said.id = cur.block.id; said.appendChild(box); cur.block.replaceWith(said); cur.block = said; cur.part.classList.add("final");
@@ -500,7 +523,22 @@ const H = {
   },
   result(e) {
     if (e.first) { const block = isle("result", `tool result · ${e.tool}`); $("feed").appendChild(block); cur.box = block.querySelector(".tok"); cur.scrolls = true; cur.moreBtn = null; }
-    queue.unshift(...e.toks.map(t => ({t: "rtok", s: t[0], p: t[1]})));
+    queue.unshift(...e.toks.map(t => ({t: "rtok", s: t[0], p: t[1]})), ...(e.more ? [{t: "rmore", n: e.more}] : []));
+  },
+  rmore(e) { if (cur.box) cur.box.appendChild(Object.assign(el("span", "more"), {textContent: `\n… and ${e.n.toLocaleString()} more tokens, which the bot read in full`})); },
+  ping() {},
+  account(e) { if (e.live) $("feed").appendChild(el("div", "decide", `<span>${e.paper ? (e.connected === false ? "The paper-trading account could not be reached" : "Tools are live: web search, news, and a real paper-trading account") : "Search and news are live. The paper account and its prices are simulated"}</span>`)); },
+  reading(e) { status(`${cur && cur.box ? "Reading" : "Reading its instructions"}: ${e.done.toLocaleString()} of ${e.of.toLocaleString()} tokens`); },
+  woke(e) { $("feed").appendChild(el("div", "decide", `<span>${e.event === "runner_result" ? "A background task finished and woke it" : "It was woken"}</span>`)); },
+  turnend(e) { if (e.tasks) { $("feed").appendChild(el("div", "decide", `<span>Its turn ended with ${e.tasks} background task${e.tasks > 1 ? "s" : ""} still running</span>`)); status("Waiting for its background task…"); } },
+  task(e) {  // a subagent the bot started: shown as one card that fills in as it works
+    if (e.phase === "done") { const open = Object.values(cur.tasks).filter(t => !t.done).pop(); if (open) { open.done = true; open.head.textContent = "Background task · finished"; if (e.said) open.card.appendChild(el("div", "said", esc(e.said))); } return; }
+    let t = cur.tasks[e.conv];
+    if (!t) { const card = el("div", "task", `<b>Background task · working</b><ul></ul>`); $("feed").appendChild(card); t = cur.tasks[e.conv] = {card, head: card.querySelector("b"), list: card.querySelector("ul"), steps: 0, tokens: 0}; }
+    if (e.phase === "step") t.steps = e.n; else if (e.phase === "tok") t.tokens = e.tokens;
+    else if (e.phase === "did" && e.tools.length) t.list.appendChild(el("li", "", esc(e.tools.slice(0, 4).join(", ") + (e.tools.length > 4 ? "…" : ""))));
+    else if (e.phase === "reading") status(`A background task is reading: ${e.done.toLocaleString()} of ${e.of.toLocaleString()} tokens`);
+    if (!t.done) t.head.textContent = `Background task · step ${t.steps || 1}${t.tokens ? ` · ${t.tokens.toLocaleString()} tokens written` : ""}`;
   },
   trim(e) {  // the response began repeating itself and was cut: take the repeat back out
     for (let i = 0; i < e.n && cur.box.lastChild; i++) { cur.box.lastChild.remove(); if (cur.part.lastChild) cur.part.lastChild.remove(); }
@@ -509,6 +547,13 @@ const H = {
   slept(e) { $("feed").appendChild(el("div", "decide", `<span>It waited ${Math.round(e.seconds || 0)} s${e.reason ? ": " + esc(e.reason) : ""}</span>`)); },
   rtok(e) { addTok(e.s, e.p); return 1; },
   done(e) {
+    if (e.init) {
+      settle("the limit was reached");
+      const o = e.outcome || {}, held = (o.positions || []).map(p => `${esc(p.symbol)} $${Math.round(p.value).toLocaleString()}`).join(" · ");
+      $("outcome").textContent = INIT_ENDS[e.end] + ".";
+      $("feed").appendChild(el("div", "card sum", `<div><b>${INIT_ENDS[e.end]}</b><span>how it ended</span></div><div><b>${held || "No positions"}</b><span>${o.orders ? `${o.orders} order${o.orders > 1 ? "s" : ""} resting · ` : ""}$${Math.round(o.cash || 0).toLocaleString()} cash left of $1,000</span></div><div><b>${e.calls} working steps</b><span>${o.schedules || 0} schedule${o.schedules === 1 ? "" : "s"} set · ${o.tasks || 0} background task${o.tasks === 1 ? "" : "s"}</span></div><div><b>${e.seconds >= 90 ? (e.seconds / 60).toFixed(0) + " min" : e.seconds.toFixed(0) + " s"}</b><span>${e.tps.toFixed(0)} tokens a second</span></div>`));
+      return finish("Done.");
+    }
     settle("the turn limit was reached");
     if (e.end === "cap" && cur.box && !cur.box.childElementCount) cur.box.textContent = "(the turn limit was reached before the agent read this result)";
     const verdict = e.end === "cap" ? "Hit the turn limit" : e.end !== "finished" ? "Work was left undone" : e.correct ? "Right answer" : "Wrong answer";
@@ -530,26 +575,41 @@ setInterval(() => { if (performance.now() - lastFrame > 400) drain(true); }, 200
 
 // ---------------------------------------------------------------- running
 async function runLive() {
-  const q = new URLSearchParams({bot: S.bot, type: S.kind, length: S.size[S.kind], push: S.push, where: S.where});
+  const q = new URLSearchParams(BOTS[S.bot].templates ? {bot: S.bot, type: S.kind, push: S.push} : {bot: S.bot, type: S.kind, length: S.size[S.kind], push: S.push, where: S.where});
   S.abort = new AbortController();
-  try {
-    const r = await fetch(`${base()}/api/run?${q}`, {headers: headers(), signal: S.abort.signal, cache: "no-store"});
-    if (r.status === 401) return queue.push({t: "error", msg: "locked"});
-    if (!r.ok) return queue.push({t: "error", msg: (await r.json().catch(() => ({}))).detail || "the server said " + r.status});
+  let seen = 0, ended = false;
+  // Reads one stream to its end. True when the run itself ended; false when only the connection did.
+  const pump = async url => {
+    const r = await fetch(url, {headers: headers(), signal: S.abort.signal, cache: "no-store"});
+    if (r.status === 401) { queue.push({t: "error", msg: "locked"}); return true; }
+    if (!r.ok) { queue.push({t: "error", msg: (await r.json().catch(() => ({}))).detail || "the server said " + r.status}); return true; }
     const reader = r.body.getReader(), dec = new TextDecoder();
     let buf = "";
     for (;;) {
       const {value, done} = await reader.read();
-      if (done) break;
+      if (done) return ended;
       buf += dec.decode(value, {stream: true});
       let i;
       while ((i = buf.indexOf("\n\n")) >= 0) {
         const line = buf.slice(0, i); buf = buf.slice(i + 2);
-        if (line.startsWith("data: ")) { const e = JSON.parse(line.slice(6)); if (e.run) S.runId = e.run; queue.push(e); }
+        if (!line.startsWith("data: ")) continue;
+        const e = JSON.parse(line.slice(6));
+        if (e.run) S.runId = e.run;
+        if (e.n) { if (e.n <= seen) continue; seen = e.n; }
+        if (["done", "cancelled", "error"].includes(e.t)) ended = true;
+        queue.push(e);
       }
     }
-    if (S.running && !queue.some(e => ["done", "cancelled", "error"].includes(e.t))) queue.push({t: "error", msg: "the stream ended early"});
-  } catch (e) { if (S.running && e.name !== "AbortError") queue.push({t: "error", msg: "could not reach the server"}); }
+  };
+  let tries = 0;
+  for (let url = `${base()}/api/run?${q}`; S.running; url = `${base()}/api/resume?run=${S.runId}&after=${seen}`) {
+    try { if (await pump(url)) return; } catch (e) { if (e.name === "AbortError" || !S.running) return; }
+    // the connection dropped (a phone that slept, a network change): the run goes on, so pick its stream up again
+    if (!S.runId || ++tries > 40) break;
+    status("Reconnecting…");
+    await new Promise(r => setTimeout(r, Math.min(4000, 500 * tries)));
+  }
+  if (S.running) queue.push({t: "error", msg: S.runId ? "the connection was lost" : "could not reach the server"});
 }
 function runReplay() {
   const mine = S.lib.filter(r => (r.bot || "pilot") === S.bot);
