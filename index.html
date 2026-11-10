@@ -53,23 +53,21 @@ p{margin:0}
 /* top bar */
 .bar{position:sticky;top:0;z-index:30;display:flex;height:60px;align-items:center;gap:8px;background:color-mix(in oklab,var(--background) 80%,transparent);padding:0 14px 0 18px;-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
 .brand{font-size:26px;line-height:1}
-.tagline{font-size:13px;color:var(--muted-foreground);margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;background:var(--secondary);padding:4px 10px;font-size:12px;font-weight:500;white-space:nowrap}
-.bar .chip{margin-left:auto}
+.bar .chip{margin-left:auto;min-width:0}
+#chiptext{overflow:hidden;text-overflow:ellipsis}
 .dot{position:relative;display:inline-flex;width:6px;height:6px;border-radius:50%;background:var(--faint-foreground)}
 .chip.live .dot{background:var(--positive)}
 .chip.live .dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:color-mix(in oklab,var(--positive) 60%,transparent);animation:ping 1s cubic-bezier(0,0,.2,1) infinite}
 .chip.busy .dot{background:var(--chart-2)}
 @keyframes ping{75%,100%{transform:scale(2);opacity:0}}
 
-/* layout */
-.shell{max-width:1240px;margin:0 auto;padding:8px 18px 0;display:grid;grid-template-columns:348px minmax(0,1fr);gap:28px;align-items:start}
-.side{position:sticky;top:72px;display:flex;flex-direction:column;gap:18px}
-.main{min-width:0;display:flex;flex-direction:column;gap:16px}
-@media (min-width:1024px){.bar{height:84px;gap:22px;padding:0 48px}.shell{padding:4px 48px 0}.brand{font-size:30px}}
-@media (min-width:901px){.side{max-height:calc(100dvh - 84px)}.side>.card{display:flex;flex-direction:column;min-height:0}.settings{min-height:0;overflow:hidden auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border) transparent}.side>.card>.sec{flex-shrink:0}}
-@media (min-width:1024px){.side{top:92px;max-height:calc(100dvh - 104px)}}
-@media (max-width:900px){.shell{display:flex;flex-direction:column;gap:16px;padding:8px 14px 0}.side{position:static;order:1}.main{display:contents}.intro{order:0}.hud{order:2}.feed{order:3}footer{order:4}.tagline{display:none}}
+/* layout: the settings dock at the left edge, the run fills the rest and starts at the top */
+.shell{padding:0 16px;display:grid;grid-template-columns:348px minmax(0,1fr);gap:28px;align-items:start}
+.side{position:sticky;top:64px;margin-top:64px;display:flex;flex-direction:column;gap:18px}
+.main{min-width:0;width:100%;max-width:1200px;justify-self:center;padding-top:16px;display:flex;flex-direction:column;gap:16px}
+@media (min-width:901px){.bar{position:fixed;left:0;width:364px;height:64px;padding:0 2px 0 22px;background:none;-webkit-backdrop-filter:none;backdrop-filter:none}.side{max-height:calc(100dvh - 80px)}.side>.card{display:flex;flex-direction:column;min-height:0}.settings{min-height:0;overflow:hidden auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border) transparent}.side>.card>.sec{flex-shrink:0}}
+@media (max-width:900px){.shell{display:flex;flex-direction:column;gap:16px;padding:8px 14px 0}.side{position:static;order:1;margin-top:0}.main{display:contents}.intro{order:0}.hud{order:2}.feed{order:3}footer{order:4}}
 
 /* cards */
 .card{overflow:hidden;border-radius:24px;background:color-mix(in oklab,var(--card) 72%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:var(--card-shadow)}
@@ -155,7 +153,10 @@ details.adv[open] summary::after{rotate:180deg}
 .field{display:flex;height:50px;flex:1;min-width:0;align-items:center;border-radius:12px;border:1px solid color-mix(in oklab,var(--foreground) 12%,transparent);background:var(--field);font-size:16px;transition:border-color .15s}
 .field:focus-within{border-color:color-mix(in oklab,var(--foreground) 55%,transparent)}
 .field input{height:100%;min-width:0;flex:1;padding:0 14px;outline:none}
-.field input::placeholder{color:var(--dim-foreground)}
+.field input::placeholder,.field textarea::placeholder{color:var(--dim-foreground)}
+.field.tall{height:auto;align-items:stretch}
+.field textarea{flex:1;min-width:0;min-height:132px;padding:12px 14px;outline:none;resize:vertical;background:transparent;color:inherit;font:inherit;font-size:15px;line-height:1.45;border:0}
+.brief{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .unlock{display:flex;gap:8px;margin-top:12px}
 .status{min-height:18px;margin-top:12px;text-align:center;font-size:13px;color:var(--muted-foreground)}
 
@@ -171,7 +172,7 @@ details.adv[open] summary::after{rotate:180deg}
 .gbar{position:relative;width:150px;height:6px;border-radius:9999px;background:linear-gradient(90deg,var(--go),color-mix(in oklab,var(--go) 16%,transparent) 47%,color-mix(in oklab,var(--stop) 16%,transparent) 53%,var(--stop))}
 .gbar i{position:absolute;top:50%;left:50%;width:14px;height:14px;border-radius:50%;background:var(--foreground);box-shadow:var(--control-shadow);transform:translate(-50%,-50%);transition:left .12s linear}
 .glabels{display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:var(--faint-foreground)}
-@media (min-width:1024px){.hud{top:92px}}
+@media (min-width:901px){.hud{top:12px}}
 @media (max-width:640px){.hudtop{flex-direction:column;align-items:stretch;gap:12px}.gauge>div{flex:1}.gbar{width:auto}.title h2{font-size:24px}}
 .strip{display:flex;gap:3px;height:14px;margin-top:14px}
 .part{display:flex;border-radius:4px;overflow:hidden;background:var(--secondary);min-width:4px;cursor:pointer}
@@ -223,7 +224,6 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
 <body>
 <header class="bar">
   <span class="brand lab-display">Stop Signal</span>
-  <span class="tagline">watching an agent decide when to stop</span>
   <span class="chip" id="chip"><span class="dot"></span><span id="chiptext">Connecting</span></span>
 </header>
 
@@ -239,6 +239,11 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
         </div>
         <h2 class="lbl" id="task-label">Task</h2>
         <div class="choices" id="kinds" role="radiogroup" aria-labelledby="task-label"></div>
+        <div class="brief" id="custom" hidden>
+          <label class="field tall"><textarea id="brief" maxlength="8000" placeholder="What should the bot do with $1,000 of paper money? For example: buy the three largest US banks in equal weights, and tell me what you bought." aria-label="Your brief"></textarea></label>
+          <label class="field"><input type="text" id="briefname" maxlength="120" placeholder="A name for the bot (optional)" aria-label="A name for the bot"></label>
+          <p class="note">Your words are given to a new bot as its mission, as a template's brief is. It trades paper money only.</p>
+        </div>
         <div class="row" id="sizerow" style="margin-top:16px">
           <span class="lbl">Size</span>
           <span class="stepper"><button class="btn secondary icon" id="less" aria-label="Smaller">−</button><output id="size"></output><button class="btn secondary icon" id="more" aria-label="Larger">+</button></span>
@@ -356,6 +361,7 @@ function offered(s) {  // the task sizes, and which agents this server runs
     T.on = true; if (j.push) T.push = j.push;
     if (Array.isArray(j.templates)) {  // the templates come with the passcode
       T.kinds = {}; T.sizes = {}; T.size = {};
+      if (j.custom) { T.kinds.custom = {name: "Your own brief", blurb: "Type what the bot should do", title: "Your own brief", size: () => ""}; T.sizes.custom = [0, 0]; T.size.custom = 0; }
       for (const t of j.templates) { T.kinds[t.slug] = {name: t.name, blurb: t.runnable ? t.prompt : `${t.prompt} · not here yet: ${t.why}`, title: t.name, size: () => "", off: !t.runnable}; T.sizes[t.slug] = [0, 0]; T.size[t.slug] = 0; }
       if (!T.kind || !T.kinds[T.kind] || T.kinds[T.kind].off) T.kind = (j.templates.find(t => t.runnable) || {}).slug || null;
       T.world = j.live_paper ? "Its tool calls are real: live search and news, and orders on a paper-trading account." : j.live_tools ? "Its search and news are live. Its paper account and prices are simulated." : j.simulated_prices ? "It works in a frozen snapshot: recorded search and news, simulated prices." : "";
@@ -435,7 +441,9 @@ function render() {
   document.querySelectorAll("#where button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.where); b.disabled = S.running; });
   const run = $("run");
   run.className = "btn lg wide " + (S.running ? "outline" : "primary"); run.textContent = S.running ? "Stop" : S.mode === "replay" ? (recorded ? "Play recorded run" : "Run needs the passcode") : "Run";
-  run.disabled = !(S.running || (live && k) || recorded);
+  const custom = tpl && k === "custom";
+  $("custom").hidden = !custom; $("brief").disabled = $("briefname").disabled = S.running;
+  run.disabled = !(S.running || (live && k && !(custom && !$("brief").value.trim())) || recorded);
   if (!S.running && !cur) status(live ? (S.mode === "remote" ? (tpl ? `Deploys the template as a new bot. A run takes about ten minutes; the first waits two more for the GPU. ${BOTS[S.bot].world || ""}` : "A fresh task each time. The first run may wait a minute for the GPU.") : tpl ? `Ready. Deploys the template as a new bot. ${BOTS[S.bot].world || ""}` : "Ready. A fresh task each time.")
     : S.mode === "replay" ? (tpl ? "This agent runs live only, with the passcode." : S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
 }
@@ -450,6 +458,10 @@ $("bots").onclick = e => { const b = e.target.closest("button"); if (b && !S.run
 $("slider").insertAdjacentHTML("afterbegin", [0, 1, 2, 3, 4].map(i => `<span class="stopdot" style="left:calc(21px + (100% - 42px) * ${i / 4})"></span>`).join(""));
 $("kinds").onclick = e => { const b = e.target.closest(".choice"); if (!b || S.running) return; S.kind = b.dataset.k; if (S.mode === "replay") syncReplay(); render(); };
 $("less").onclick = () => { S.size[S.kind]--; render(); }; $("more").onclick = () => { S.size[S.kind]++; render(); };
+// the brief being typed is kept on this device, so a reload does not lose it
+try { $("brief").value = localStorage.getItem("stop-signal-brief") || ""; $("briefname").value = localStorage.getItem("stop-signal-brief-name") || ""; } catch (e) {}
+$("brief").oninput = () => { try { localStorage.setItem("stop-signal-brief", $("brief").value); } catch (e) {} render(); };
+$("briefname").oninput = () => { try { localStorage.setItem("stop-signal-brief-name", $("briefname").value); } catch (e) {} };
 $("push").oninput = e => { S.push = +e.target.value; render(); };
 $("reset").onclick = () => { S.push = 0; render(); };
 $("seg").onclick = e => { const b = e.target.closest("button"); if (b && !S.running) { S.push = +b.dataset.v; render(); } };
@@ -486,7 +498,7 @@ const H = {
     $("t-name").textContent = e.title || BOTS[cur.bot].kinds[e.type].title;
     $("t-sub").innerHTML = `<span id="outcome">${S.mode === "replay" ? "Replaying a recorded run." : "Running now."}</span> ${esc(cur.push)} <span class="id">${esc(e.id)}</span>`;
     $("now").textContent = "–"; $("needle").style.left = "50%";
-    $("feed").appendChild(el("div", "user", (e.init ? `<span class="lbl">The template's brief, which the new bot is given</span>` : "") + esc(e.request)));
+    $("feed").appendChild(el("div", "user", (e.init ? `<span class="lbl">${e.type === "custom" ? "Your brief" : "The template's brief"}, which the new bot is given</span>` : "") + esc(e.request)));
     status(S.mode === "replay" ? "Replaying…" : e.init ? "Deployed. It is reading its instructions…" : "The agent is working…");
   },
   decide(e) {
@@ -576,11 +588,14 @@ setInterval(() => { if (performance.now() - lastFrame > 400) drain(true); }, 200
 // ---------------------------------------------------------------- running
 async function runLive() {
   const q = new URLSearchParams(BOTS[S.bot].templates ? {bot: S.bot, type: S.kind, push: S.push} : {bot: S.bot, type: S.kind, length: S.size[S.kind], push: S.push, where: S.where});
+  // a typed brief goes in the body of a POST, not in the address
+  const typed = BOTS[S.bot].templates && S.kind === "custom"
+    ? {method: "POST", headers: {...headers(), "Content-Type": "application/json"}, body: JSON.stringify({bot: S.bot, type: "custom", prompt: $("brief").value.trim(), name: $("briefname").value.trim(), push: S.push})} : null;
   S.abort = new AbortController();
   let seen = 0, ended = false;
   // Reads one stream to its end. True when the run itself ended; false when only the connection did.
-  const pump = async url => {
-    const r = await fetch(url, {headers: headers(), signal: S.abort.signal, cache: "no-store"});
+  const pump = async (url, init) => {
+    const r = await fetch(url, {headers: headers(), ...(init || {}), signal: S.abort.signal, cache: "no-store"});
     if (r.status === 401) { queue.push({t: "error", msg: "locked"}); return true; }
     if (!r.ok) { queue.push({t: "error", msg: (await r.json().catch(() => ({}))).detail || "the server said " + r.status}); return true; }
     const reader = r.body.getReader(), dec = new TextDecoder();
@@ -602,8 +617,10 @@ async function runLive() {
     }
   };
   let tries = 0;
-  for (let url = `${base()}/api/run?${q}`; S.running; url = `${base()}/api/resume?run=${S.runId}&after=${seen}`) {
-    try { if (await pump(url)) return; } catch (e) { if (e.name === "AbortError" || !S.running) return; }
+  let first = true;
+  for (let url = typed ? `${base()}/api/run` : `${base()}/api/run?${q}`; S.running; url = `${base()}/api/resume?run=${S.runId}&after=${seen}`) {
+    try { if (await pump(url, first ? typed : null)) return; } catch (e) { if (e.name === "AbortError" || !S.running) return; }
+    first = false;
     // the connection dropped (a phone that slept, a network change): the run goes on, so pick its stream up again
     if (!S.runId || ++tries > 40) break;
     status("Reconnecting…");
