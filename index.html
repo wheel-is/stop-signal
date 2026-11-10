@@ -222,6 +222,11 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
     <div class="card">
       <div class="settings">
       <section class="sec">
+        <div id="agent" hidden>
+          <h2 class="lbl" id="agent-label">Agent</h2>
+          <div class="seg full" id="bots" role="group" aria-labelledby="agent-label" style="margin-top:10px"><button data-v="pilot" aria-pressed="true">Qwen3-4B</button><button data-v="trader">Qwen3.8-27B · trading bot</button></div>
+          <p class="note" id="botnote" style="margin:10px 0 18px"></p>
+        </div>
         <h2 class="lbl" id="task-label">Task</h2>
         <div class="choices" id="kinds" role="radiogroup" aria-labelledby="task-label"></div>
         <div class="row" style="margin-top:16px">
@@ -236,7 +241,7 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
           <div class="ends"><span>stop sooner</span><span>keep going</span></div>
           <details class="adv"><summary>How the push is applied</summary>
             <div class="seg full" id="where" role="group" aria-label="Where the push is applied" style="margin-top:4px"><button data-v="all" aria-pressed="true">Every token</button><button data-v="start">First token of a turn</button></div>
-            <p class="note" style="margin-top:10px">It adds one direction to the model's layer 23. 1× is the gap between an average stop turn and an average tool-call turn. On eight test tasks needing six tool calls, the agent made 5.8 with no push, 3.2 at 1× stop sooner, 0.5 at 2×, and 11.6 at 1× keep going.</p>
+            <p class="note" id="pushnote" style="margin-top:10px"></p>
           </details>
         </div>
         <div id="dial-replay" hidden>
@@ -249,7 +254,7 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
         <button class="btn primary lg wide" id="run" disabled>Run</button>
         <div class="status" id="status" role="status" aria-live="polite">Connecting…</div>
         <div id="lock" hidden>
-          <p class="note" style="margin-top:14px">You are watching recorded runs. With a passcode the agent runs live on a GPU, on a fresh task each time.</p>
+          <p class="note" style="margin-top:14px">You are watching recorded runs. With a passcode the agents run live on a GPU, on a fresh task each time.</p>
           <form class="unlock" id="unlock"><label class="field"><input type="password" id="key" placeholder="Passcode" autocomplete="off" aria-label="Passcode"></label><button class="btn secondary xl">Unlock</button></form>
         </div>
         <div id="golive" hidden><p class="note" style="margin-top:12px;text-align:center"><button class="link" id="backlive">Back to live mode</button></p></div>
@@ -262,7 +267,7 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
   <main class="main">
     <section class="card intro" id="intro"><div class="sec">
       <h1 class="lab-display">Watch an AI agent decide when to stop</h1>
-      <p>An agent (Qwen3-4B) gets a small job and a set of tools. It calls one tool at a time, reads each result, and at some point writes a final answer. Every word is coloured by a score read from inside the model at that moment.</p>
+      <p>An agent gets a small job and a set of tools. It calls tools, reads each result, and at some point writes a final answer. Every word is coloured by a score read from inside the model at that moment.</p>
       <div class="legend"><span><span class="sw g"></span>blue: its next turn will call another tool</span><span><span class="sw s"></span>amber: its next turn will be the final answer</span></div>
     </div></section>
     <section class="card hud" id="hud" hidden><div class="sec">
@@ -273,7 +278,7 @@ footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
       <div class="strip" id="strip" title="The whole run, one block per turn. Click a block to jump to it."></div>
     </div></section>
     <div class="feed" id="feed"></div>
-    <footer>Qwen3-4B with four real tools on a generated workspace. The score is a linear read-out at layer 24, averaged over the last four tokens. Research demo.</footer>
+    <footer id="foot"></footer>
   </main>
 </div>
 <button class="btn primary pill jump" id="jump" hidden>Jump to latest ↓</button>
@@ -286,12 +291,34 @@ const QS = new URLSearchParams(location.search), ON_THIS_MACHINE = ["localhost",
 const REMOTE = (ON_THIS_MACHINE && QS.get("api")) || "https://penumbra-dev--stop-signal-live-web.us-east.modal.run";
 const LOCAL = ON_THIS_MACHINE && !QS.has("hosted") && !QS.has("api");
 const $ = id => document.getElementById(id);
-const KINDS = {
-  batch:   {name: "Listed files",  blurb: "Read the files named in the request", title: "Read the files I listed",       size: n => `${n} files`},
-  dirscan: {name: "Whole folder",  blurb: "Read every file in a folder",          title: "Read every file in a folder",  size: n => `${n - 1} file${n === 2 ? "" : "s"} in the folder`},
-  chain:   {name: "Config chain",  blurb: "Follow links from file to file",       title: "Follow a chain of configs",    size: n => `chain of ${n} files`},
-  fix:     {name: "Failing tests", blurb: "Fix bugs until the tests pass",        title: "Fix the failing tests",        size: n => `${n} bug${n === 1 ? "" : "s"}`},
+const BOTS = {
+  pilot: {
+    about: "A small model with four file tools, working on a generated project folder.",
+    foot: "Qwen3-4B with four real tools on a generated workspace. The score is a linear read-out at layer 24, averaged over the last four tokens. Research demo.",
+    push: "It adds one direction to the model's layer 23. 1× is the gap between an average stop turn and an average tool-call turn. On eight test tasks needing six tool calls, the agent made 5.8 with no push, 3.2 at 1× stop sooner, 0.5 at 2×, and 11.6 at 1× keep going.",
+    kinds: {
+      batch:   {name: "Listed files",  blurb: "Read the files named in the request", title: "Read the files I listed",       size: n => `${n} files`},
+      dirscan: {name: "Whole folder",  blurb: "Read every file in a folder",          title: "Read every file in a folder",  size: n => `${n - 1} file${n === 2 ? "" : "s"} in the folder`},
+      chain:   {name: "Config chain",  blurb: "Follow links from file to file",       title: "Follow a chain of configs",    size: n => `chain of ${n} files`},
+      fix:     {name: "Failing tests", blurb: "Fix bugs until the tests pass",        title: "Fix the failing tests",        size: n => `${n} bug${n === 1 ? "" : "s"}`},
+    },
+    sizes: {batch: [2, 12], dirscan: [2, 12], chain: [2, 12], fix: [1, 4]}, size: {batch: 4, dirscan: 5, chain: 4, fix: 2}, kind: "batch", on: true,
+  },
+  trader: {
+    about: "A 27B model as a trading bot: a production bot runtime's own prompt, turn engine and tools, on a simulated paper account.",
+    foot: "Qwen3.8-27B in the bot's own turn engine, trading a simulated paper account with the real tools. The score is a linear read-out at layer 48, averaged over the last four tokens. Research demo.",
+    push: "It adds one direction to the model's layer 56, from the start of each response until the bot opens a tool call. 1× is the gap between an average stopping response and an average working one. On ten test tasks the bot took 5.7 working steps with no push; 5.6 at 1× stop sooner, 1.0 at 1.5× and none at 2×, where it answers at once with the work undone; 6.4 at 1× keep going and 7.2 at 2×. Below layer 44 the same push changes nothing.",
+    kinds: {
+      quotes:     {name: "Price a basket",   blurb: "Add up live asks for a few stocks",        title: "Price a basket",           size: n => `${n} stocks`},
+      orderchain: {name: "Amended order",    blurb: "Follow an order through its replacements", title: "Trace an amended order",   size: n => `replaced ${n} time${n === 1 ? "" : "s"}`},
+      notes:      {name: "Its own notes",    blurb: "Find a rule that moved between files",     title: "Find the current rule",    size: n => `${n} file${n === 1 ? "" : "s"} deep`},
+      buy:        {name: "Buy and confirm",  blurb: "Place an order, report the real fill",     title: "Buy and confirm the fill", size: n => n === 0 ? "fills at once" : n === 1 ? "fills by the first check" : `fills after ${n - 1} wait${n === 2 ? "" : "s"}`},
+      flatten:    {name: "Flatten the book", blurb: "Sell everything, confirm it is flat",      title: "Flatten the book",         size: n => n === 0 ? "fills at once" : n === 1 ? "fills by the first check" : `fills after ${n - 1} wait${n === 2 ? "" : "s"}`},
+    },
+    sizes: {quotes: [2, 8], orderchain: [1, 8], notes: [1, 8], buy: [0, 4], flatten: [0, 4]}, size: {quotes: 3, orderchain: 3, notes: 3, buy: 2, flatten: 1}, kind: "buy", on: false,
+  },
 };
+let KINDS = BOTS.pilot.kinds;  // the tasks of the agent that is selected
 const ENDS = {finished: "Finished the work, then stopped", plan: "Announced a next step and stopped", early: "Answered with work left", cap: "Never stopped"};
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 // A score as a tint of the theme's chart colours: amber toward stop, blue toward another tool call.
@@ -305,8 +332,8 @@ function paint(el, p, words = true) {
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const pushText = v => v === 0 ? "Neutral" : `${Math.abs(v)}× ${v > 0 ? "keep going" : "stop sooner"}`;
 
-const S = {mode: "connecting", key: null, sizes: {batch: [2, 12], dirscan: [2, 12], chain: [2, 12], fix: [1, 4]}, kind: "batch",
-           size: {batch: 4, dirscan: 5, chain: 4, fix: 2}, push: 0, where: "all", running: false, abort: null, runId: null, lib: null, speed: 1, info: {}};
+const S = {mode: "connecting", key: null, bot: "pilot", sizes: BOTS.pilot.sizes, kind: BOTS.pilot.kind,
+           size: BOTS.pilot.size, push: 0, where: "all", running: false, abort: null, runId: null, lib: null, speed: 1, info: {}};
 let queue = [], cur = null, fast = false, follow = true, lastFrame = 0, replayTimer = null;
 
 // ---------------------------------------------------------------- talking to the server
@@ -317,18 +344,28 @@ async function getJSON(path, key) {
   if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), {status: r.status});
   return r.json();
 }
+function offered(s) {  // the task sizes, and which agents this server runs
+  if (s.sizes) BOTS.pilot.sizes = s.sizes;
+  const j = s.bots && s.bots.trader;
+  if (j) { BOTS.trader.on = true; if (j.sizes) BOTS.trader.sizes = j.sizes; if (j.push) BOTS.trader.push = j.push; }
+  if (s.bots && !s.bots.pilot) BOTS.pilot.on = false;
+  S.sizes = BOTS[S.bot].sizes;
+  if (!BOTS[S.bot].on) setBot(BOTS.pilot.on ? "pilot" : "trader");
+  $("agent").hidden = !(BOTS.pilot.on && BOTS.trader.on);
+}
 async function connect() {
   if (LOCAL) {
-    try { const s = await getJSON("/api/status"); if (s.sizes) S.sizes = s.sizes; S.info = s; setMode(s.state === "ready" ? "local" : "waking"); if (s.state !== "ready") setTimeout(connect, 1500); return; }
+    try { const s = await getJSON("/api/status"); offered(s); S.info = s; setMode(s.state === "ready" ? "local" : "waking"); if (s.state !== "ready") setTimeout(connect, 1500); return; }
     catch (e) { /* no local server: fall through to recorded runs */ }
   } else if (REMOTE) {
+    getJSON("/api/status").then(s => { offered(s); render(); }).catch(() => {});
     const saved = (() => { try { return localStorage.getItem("stop-signal-key"); } catch (e) { return null; } })();
     if (saved && await tryKey(saved)) return;
   }
   setMode("replay");
 }
 async function tryKey(key) {
-  try { const s = await getJSON("/api/check", key); S.key = key; if (s.sizes) S.sizes = s.sizes; S.info = s; try { localStorage.setItem("stop-signal-key", key); } catch (e) {} setMode("remote"); return true; }
+  try { const s = await getJSON("/api/check", key); S.key = key; offered(s); S.info = s; try { localStorage.setItem("stop-signal-key", key); } catch (e) {} setMode("remote"); return true; }
   catch (e) { if (e.status === 401) { try { localStorage.removeItem("stop-signal-key"); } catch (x) {} } return false; }
 }
 async function library() {
@@ -357,11 +394,21 @@ function paintDial() {  // the fill runs from the middle to the thumb, in the co
   fill.style.background = `linear-gradient(${S.push < 0 ? 270 : 90}deg, color-mix(in oklab, ${c} 70%, transparent), ${c})`;
   $("dialval").style.color = S.push === 0 ? "" : c;
 }
+function setBot(b) {
+  BOTS[S.bot].kind = S.kind;
+  S.bot = b; KINDS = BOTS[b].kinds; S.sizes = BOTS[b].sizes; S.size = BOTS[b].size; S.kind = BOTS[b].kind;
+  $("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="choice" type="button" role="radio" data-k="${k}"><span class="ring" aria-hidden="true"></span><span><b>${v.name}</b><small>${v.blurb}</small></span></button>`).join("");
+  if (S.mode === "replay") syncReplay();
+}
 function render() {
+  const recorded = S.mode === "replay" && S.lib && S.lib.some(r => (r.bot || "pilot") === S.bot);
   const live = S.mode === "local" || S.mode === "remote", k = S.kind, [lo, hi] = S.sizes[k];
+  document.querySelectorAll("#bots button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.bot); b.disabled = S.running; });
+  $("botnote").textContent = BOTS[S.bot].about; $("pushnote").textContent = BOTS[S.bot].push; $("foot").textContent = BOTS[S.bot].foot;
+  $("dial-replay").hidden = !recorded || live;
   document.querySelectorAll(".choice").forEach(b => { b.setAttribute("aria-checked", b.dataset.k === k); b.disabled = S.running; });
   let n = Math.min(hi, Math.max(lo, S.size[k]));
-  if (S.mode === "replay" && S.lib) { const r = S.lib.find(r => r.type === k); if (r) n = r.length; }
+  if (S.mode === "replay" && S.lib) { const r = S.lib.find(r => r.type === k && (r.bot || "pilot") === S.bot); if (r) n = r.length; }
   S.size[k] = n;
   $("size").textContent = KINDS[k].size(n);
   $("less").disabled = S.running || !live || n <= lo; $("more").disabled = S.running || !live || n >= hi;
@@ -371,17 +418,18 @@ function render() {
   document.querySelectorAll("#where button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.where); b.disabled = S.running; });
   const run = $("run");
   run.className = "btn lg wide " + (S.running ? "outline" : "primary"); run.textContent = S.running ? "Stop" : S.mode === "replay" ? "Play recorded run" : "Run";
-  run.disabled = !(S.running || live || (S.mode === "replay" && S.lib && S.lib.length));
-  if (!S.running && !cur) status(live ? (S.mode === "remote" ? "A fresh task each time. The first run may wait a minute for the GPU." : "Ready. A fresh task each time.")
-    : S.mode === "replay" ? (S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
+  run.disabled = !(S.running || live || recorded);
+  if (!S.running && !cur) status(live ? (S.mode === "remote" ? (S.bot === "trader" ? "A fresh task each time. The first run waits a few minutes for the GPU." : "A fresh task each time. The first run may wait a minute for the GPU.") : "Ready. A fresh task each time.")
+    : S.mode === "replay" ? (S.bot === "trader" ? "The trading bot runs live only, with the passcode." : S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
 }
 function syncReplay() {  // the dial settings that exist for the chosen task
-  const opts = [...new Set((S.lib || []).filter(r => r.type === S.kind).map(r => r.push))].sort((a, b) => a - b);
+  const opts = [...new Set((S.lib || []).filter(r => r.type === S.kind && (r.bot || "pilot") === S.bot).map(r => r.push))].sort((a, b) => a - b);
   if (!opts.includes(S.push)) S.push = opts.includes(0) ? 0 : (opts[0] ?? 0);
   $("seg").innerHTML = opts.map(v => `<button data-v="${v}">${v === 0 ? "Neutral" : v < 0 ? "Stop sooner" : "Keep going"}</button>`).join("");
 }
 const status = s => { $("status").textContent = s; };
-$("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="choice" type="button" role="radio" data-k="${k}"><span class="ring" aria-hidden="true"></span><span><b>${v.name}</b><small>${v.blurb}</small></span></button>`).join("");
+setBot("pilot");
+$("bots").onclick = e => { const b = e.target.closest("button"); if (b && !S.running && b.dataset.v !== S.bot) { setBot(b.dataset.v); render(); } };
 $("slider").insertAdjacentHTML("afterbegin", [0, 1, 2, 3, 4].map(i => `<span class="stopdot" style="left:calc(21px + (100% - 42px) * ${i / 4})"></span>`).join(""));
 $("kinds").onclick = e => { const b = e.target.closest(".choice"); if (!b || S.running) return; S.kind = b.dataset.k; if (S.mode === "replay") syncReplay(); render(); };
 $("less").onclick = () => { S.size[S.kind]--; render(); }; $("more").onclick = () => { S.size[S.kind]++; render(); };
@@ -416,16 +464,16 @@ const H = {
   queued() { status("Waiting for the GPU…"); },
   start(e) {
     $("feed").innerHTML = ""; $("strip").innerHTML = ""; $("intro").hidden = true; $("hud").hidden = false;
-    cur = {id: e.id, box: null, part: null, pending: null,
+    cur = {id: e.id, box: null, part: null, pending: null, bot: e.bot || "pilot",
            push: e.push ? `Pushed ${pushText(e.push).toLowerCase()}${e.every_token ? "" : ", first token only"}.` : ""};
-    $("t-name").textContent = KINDS[e.type].title;
+    $("t-name").textContent = BOTS[cur.bot].kinds[e.type].title;
     $("t-sub").innerHTML = `<span id="outcome">${S.mode === "replay" ? "Replaying a recorded run." : "Running now."}</span> ${esc(cur.push)} <span class="id">${esc(e.id)}</span>`;
     $("now").textContent = "–"; $("needle").style.left = "50%";
     $("feed").appendChild(el("div", "user", esc(e.request)));
     status(S.mode === "replay" ? "Replaying…" : "The agent is working…");
   },
   decide(e) {
-    const row = el("div", "decide", `<span>${e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.truth.done ? "· the work is in fact done" : "· work in fact remains"}</span>`);
+    const row = el("div", "decide", `<span>${e.closing ? "Stop score when asked to close the turn" : e.woke ? "Stop score on waking" : e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.truth.done ? "· the work is in fact done" : "· work in fact remains"}</span>`);
     paint(row.querySelector(".pill"), e.p);
     $("feed").appendChild(row); cur.pending = row.querySelector(".what");
   },
@@ -442,20 +490,30 @@ const H = {
       settle("→ it stops");
       const said = el("div", "answer", `<span class="lbl">Final answer</span>`), box = cur.box;
       box.className = "tok"; said.id = cur.block.id; said.appendChild(box); cur.block.replaceWith(said); cur.block = said; cur.part.classList.add("final");
+    } else if (e.tools) {  // the trading bot: several calls at once, each result arrives as its own card
+      settle(e.next === "close" ? "→ it closes the turn" : e.next === "sleep" ? "→ it waits" : e.tools.length > 1 ? `→ it calls ${e.tools.length} tools` : "→ it calls a tool");
     } else {
       settle("→ it calls another tool");
       const block = isle("result", `tool result · ${e.tool}`);
       $("feed").appendChild(block); cur.box = block.querySelector(".tok"); cur.scrolls = true; cur.moreBtn = null;
     }
   },
-  result(e) { queue.unshift(...e.toks.map(t => ({t: "rtok", s: t[0], p: t[1]}))); },
+  result(e) {
+    if (e.first) { const block = isle("result", `tool result · ${e.tool}`); $("feed").appendChild(block); cur.box = block.querySelector(".tok"); cur.scrolls = true; cur.moreBtn = null; }
+    queue.unshift(...e.toks.map(t => ({t: "rtok", s: t[0], p: t[1]})));
+  },
+  trim(e) {  // the response began repeating itself and was cut: take the repeat back out
+    for (let i = 0; i < e.n && cur.box.lastChild; i++) { cur.box.lastChild.remove(); if (cur.part.lastChild) cur.part.lastChild.remove(); }
+    cur.box.appendChild(Object.assign(el("span"), {textContent: " …", title: "It began repeating itself and was cut here"}));
+  },
+  slept(e) { $("feed").appendChild(el("div", "decide", `<span>It waited ${Math.round(e.seconds || 0)} s${e.reason ? ": " + esc(e.reason) : ""}</span>`)); },
   rtok(e) { addTok(e.s, e.p); return 1; },
   done(e) {
     settle("the turn limit was reached");
     if (e.end === "cap" && cur.box && !cur.box.childElementCount) cur.box.textContent = "(the turn limit was reached before the agent read this result)";
     const verdict = e.end === "cap" ? "Hit the turn limit" : e.end !== "finished" ? "Work was left undone" : e.correct ? "Right answer" : "Wrong answer";
     $("outcome").textContent = ENDS[e.end] + ".";
-    $("feed").appendChild(el("div", "card sum", `<div><b>${ENDS[e.end].split(",")[0]}</b><span>how it ended</span></div><div><b>${verdict}</b><span>checked by the harness</span></div><div><b>${e.calls} of ${e.needed} needed</b><span>tool calls</span></div><div><b>${e.seconds.toFixed(0)} s</b><span>${e.tps.toFixed(0)} tokens a second</span></div>`));
+    $("feed").appendChild(el("div", "card sum", `<div><b>${ENDS[e.end].split(",")[0]}</b><span>how it ended</span></div><div><b>${verdict}</b><span>checked by the harness</span></div><div><b>${e.calls} of ${e.needed} needed</b><span>${esc(e.unit || "tool calls")}</span></div><div><b>${e.seconds.toFixed(0)} s</b><span>${e.tps.toFixed(0)} tokens a second</span></div>`));
     finish("Done.");
   },
   cancelled() { if (cur && cur.box) cur.box.classList.remove("writing"); settle("stopped by you"); const o = $("outcome"); if (o) o.textContent = "Stopped by you."; finish("Stopped."); },
@@ -472,7 +530,7 @@ setInterval(() => { if (performance.now() - lastFrame > 400) drain(true); }, 200
 
 // ---------------------------------------------------------------- running
 async function runLive() {
-  const q = new URLSearchParams({type: S.kind, length: S.size[S.kind], push: S.push, where: S.where});
+  const q = new URLSearchParams({bot: S.bot, type: S.kind, length: S.size[S.kind], push: S.push, where: S.where});
   S.abort = new AbortController();
   try {
     const r = await fetch(`${base()}/api/run?${q}`, {headers: headers(), signal: S.abort.signal, cache: "no-store"});
@@ -494,7 +552,8 @@ async function runLive() {
   } catch (e) { if (S.running && e.name !== "AbortError") queue.push({t: "error", msg: "could not reach the server"}); }
 }
 function runReplay() {
-  const r = S.lib.find(r => r.type === S.kind && r.push === S.push) || S.lib.find(r => r.type === S.kind);
+  const mine = S.lib.filter(r => (r.bot || "pilot") === S.bot);
+  const r = mine.find(r => r.type === S.kind && r.push === S.push) || mine.find(r => r.type === S.kind);
   if (!r) return queue.push({t: "error", msg: "no recorded run for this setting"});
   let i = 0;
   const step = () => {
