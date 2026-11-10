@@ -417,7 +417,7 @@ function render() {
   document.querySelectorAll("#seg button").forEach(b => { b.setAttribute("aria-pressed", +b.dataset.v === S.push); b.disabled = S.running; });
   document.querySelectorAll("#where button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.where); b.disabled = S.running; });
   const run = $("run");
-  run.className = "btn lg wide " + (S.running ? "outline" : "primary"); run.textContent = S.running ? "Stop" : S.mode === "replay" ? "Play recorded run" : "Run";
+  run.className = "btn lg wide " + (S.running ? "outline" : "primary"); run.textContent = S.running ? "Stop" : S.mode === "replay" ? (recorded ? "Play recorded run" : "Run needs the passcode") : "Run";
   run.disabled = !(S.running || live || recorded);
   if (!S.running && !cur) status(live ? (S.mode === "remote" ? (S.bot === "trader" ? "A fresh task each time. The first run waits a few minutes for the GPU." : "A fresh task each time. The first run may wait a minute for the GPU.") : "Ready. A fresh task each time.")
     : S.mode === "replay" ? (S.bot === "trader" ? "The trading bot runs live only, with the passcode." : S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
