@@ -1,222 +1,282 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="lab">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080f2b">
 <title>Stop Signal</title>
 <meta name="description" content="Watch an AI agent decide when to stop, token by token, with a score read from inside the model.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0c0e'/%3E%3Ccircle cx='12' cy='16' r='5' fill='%232a78d6'/%3E%3Ccircle cx='21' cy='16' r='5' fill='%23eb6834'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
 <style>
+/*
+ * The Lab theme: its tokens, its display face and its component recipes, written out as plain CSS
+ * because this page has no build step.
+ */
+@font-face{font-family:"Quant Lab";src:url("fonts/quant-lab/Bangers-Regular.ttf") format("truetype");font-display:swap;font-weight:400}
 :root{
-  --bg:#f7f7f8; --surface:#ffffff; --raised:#fbfbfc; --ink:#0b0c0e; --ink2:#5d6470; --ink3:#8b919c; --line:#e6e7eb; --line2:#eff0f2;
-  --stop:235,104,52; --go:42,120,214; --ok:#16a34a; --warn:#d97706;
-  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  --r:14px; --shadow:0 1px 2px rgba(16,18,24,.04),0 1px 1px rgba(16,18,24,.02);
-  color-scheme:light;
+  color-scheme:dark;
+  --background:#080f2b; --foreground:#eefcff; --card:#122049; --card-foreground:#eefcff; --popover:#192e56; --popover-foreground:#eefcff;
+  --glass:rgb(13 27 60 / 84%); --glass-raised:rgb(21 39 73 / 94%); --glass-blur:32px;
+  --primary:#56efd5; --primary-foreground:#082538; --secondary:rgb(112 183 212 / 13%); --secondary-foreground:#eefcff;
+  --muted:rgb(112 183 212 / 7%); --muted-foreground:#98b6d1; --soft-foreground:#d6e6f3; --subtle-foreground:#c0d2e9; --faint-foreground:#7895b4; --dim-foreground:#627f9e;
+  --accent:rgb(112 183 212 / 16%); --accent-foreground:#eefcff; --border:rgb(112 183 212 / 24%); --input:rgb(93 166 187 / 62%); --ring:#56efd5;
+  --brand:#56efd5; --brand-foreground:#082538; --working:#56efd5; --working-foreground:#082538;
+  --positive:#4ade80; --positive-soft:#86efac; --negative:#ff8298; --negative-foreground:#082538;
+  --chart-1:#4ade80; --chart-2:#ffc76b; --chart-3:#ff8298; --chart-4:#7cb9ff; --chart-5:#d8a7ff;
+  --field:rgb(6 12 34 / 45%); --control:#1b3360; --control-edge:transparent; --control-shadow:0 0 0 1px var(--ink),0 3px 0 var(--ink);
+  --overlay:rgb(4 10 30 / 78%); --highlight:rgb(160 255 240 / 12%); --shadow:rgb(0 0 0 / 70%); --spark:rgb(255 255 255 / 92%);
+  --card-shadow:0 0 0 1.5px rgb(86 143 169 / 90%),0 5px 0 #050b1b;
+  --island:#060c22; --island-foreground:#eefcff; --island-muted:#98b6d1; --island-raised:#132449; --island-accent:#56efd5;
+  --island-shadow:0 0 0 1.5px rgb(86 143 169 / 90%),0 4px 0 #050b1b;
+  --ink:#060c22;
+  --shadow-inked:0 0 0 1.5px var(--ink),0 3px 0 var(--ink); --shadow-float:inset 0 1px 0 var(--highlight),0 24px 60px -24px var(--shadow);
+  --font-sans:"Schibsted Grotesk",ui-sans-serif,system-ui,sans-serif; --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; --font-quant:"Quant Lab",Impact,sans-serif;
+  /* this page's two data colours, on the theme's chart tokens */
+  --stop:var(--chart-2); --go:var(--chart-4);
+  --chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0b0c0e; --surface:#131518; --raised:#17191d; --ink:#f3f4f6; --ink2:#a2a8b3; --ink3:#737a86; --line:#24272c; --line2:#1c1f23;
-  --stop:244,128,76; --go:86,154,238; --ok:#4ade80; --warn:#fbbf24; --shadow:none; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0b0c0e; --surface:#131518; --raised:#17191d; --ink:#f3f4f6; --ink2:#a2a8b3; --ink3:#737a86; --line:#24272c; --line2:#1c1f23;
-  --stop:244,128,76; --go:86,154,238; --ok:#4ade80; --warn:#fbbf24; --shadow:none; color-scheme:dark}
-*{box-sizing:border-box}
-html{scroll-padding-top:150px}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-button,select,input{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:6px}
+*,*::before,*::after{box-sizing:border-box;border:0 solid var(--border);outline-color:color-mix(in oklab,var(--ring) 50%,transparent)}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+::selection{background:color-mix(in oklab,var(--positive) 25%,transparent)}
+button,input,select,textarea{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent;background:none;padding:0;margin:0}
+button{cursor:pointer}
+:focus-visible{outline-width:2px;outline-style:solid;outline-offset:2px}
 [hidden]{display:none!important}
+p{margin:0}
+
+/* the lab's comic face on headings (lab-display) */
+.lab-display{font-family:var(--font-quant);font-weight:400;letter-spacing:.035em;text-transform:uppercase;text-shadow:2px 3px 0 var(--ink)}
 
 /* top bar */
-.bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line)}
-.bar>div{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:12px}
-.brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em;font-size:15.5px}
-.mark{display:inline-flex}.mark i{width:11px;height:11px;border-radius:50%;display:block}.mark i:first-child{background:rgb(var(--go))}.mark i:last-child{background:rgb(var(--stop));margin-left:-3px;mix-blend-mode:multiply}
-@media (prefers-color-scheme: dark){.mark i:last-child{mix-blend-mode:screen}}
-.tag{color:var(--ink3);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chip{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--ink2);border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;white-space:nowrap}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--ink3)}
-.chip.live .dot{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}
-.chip.busy .dot{background:var(--warn);animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{50%{opacity:.35}}
+.bar{position:sticky;top:0;z-index:30;display:flex;height:60px;align-items:center;gap:8px;background:color-mix(in oklab,var(--background) 80%,transparent);padding:0 14px 0 18px;-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.brand{font-size:26px;line-height:1}
+.tagline{font-size:13px;color:var(--muted-foreground);margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;background:var(--secondary);padding:4px 10px;font-size:12px;font-weight:500;white-space:nowrap}
+.bar .chip{margin-left:auto}
+.dot{position:relative;display:inline-flex;width:6px;height:6px;border-radius:50%;background:var(--faint-foreground)}
+.chip.live .dot{background:var(--positive)}
+.chip.live .dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:color-mix(in oklab,var(--positive) 60%,transparent);animation:ping 1s cubic-bezier(0,0,.2,1) infinite}
+.chip.busy .dot{background:var(--chart-2)}
+@keyframes ping{75%,100%{transform:scale(2);opacity:0}}
 
 /* layout */
-.shell{max-width:1180px;margin:0 auto;padding:22px 20px 90px;display:grid;grid-template-columns:330px minmax(0,1fr);gap:26px;align-items:start}
-.side{position:sticky;top:70px;display:flex;flex-direction:column;gap:14px}
-.main{min-width:0;display:flex;flex-direction:column;gap:14px}
-@media (max-width:900px){.shell{display:flex;flex-direction:column;gap:14px;padding:16px 14px 90px}.side{position:static;order:1}.main{display:contents}.intro{order:0}.hud{order:2}.feed{order:3}.tag{display:none}}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
-.pad{padding:16px}
-.label{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:0 0 10px}
-.muted{color:var(--ink2)} .small{font-size:13px} .tiny{font-size:12px;color:var(--ink3);line-height:1.45}
+.shell{max-width:1240px;margin:0 auto;padding:8px 18px 0;display:grid;grid-template-columns:348px minmax(0,1fr);gap:28px;align-items:start}
+.side{position:sticky;top:72px;display:flex;flex-direction:column;gap:18px}
+.main{min-width:0;display:flex;flex-direction:column;gap:16px}
+@media (min-width:1024px){.bar{height:84px;gap:22px;padding:0 48px}.shell{padding:4px 48px 0}.brand{font-size:30px}}
+@media (min-width:901px){.side{max-height:calc(100dvh - 84px)}.side>.card{display:flex;flex-direction:column;min-height:0}.settings{min-height:0;overflow:hidden auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border) transparent}.side>.card>.sec{flex-shrink:0}}
+@media (min-width:1024px){.side{top:92px;max-height:calc(100dvh - 104px)}}
+@media (max-width:900px){.shell{display:flex;flex-direction:column;gap:16px;padding:8px 14px 0}.side{position:static;order:1}.main{display:contents}.intro{order:0}.hud{order:2}.feed{order:3}footer{order:4}.tagline{display:none}}
 
-/* task picker */
-.kinds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.kind{appearance:none;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 11px;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:border-color .12s,background .12s}
-.kind b{font-weight:600;font-size:13.5px;letter-spacing:-.005em}.kind span{font-size:12px;color:var(--ink3);line-height:1.35}
-.kind:hover{border-color:var(--ink3)}
-.kind[aria-pressed="true"]{border-color:var(--ink);background:var(--surface);box-shadow:inset 0 0 0 1px var(--ink)}
-.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--raised)}
-.stepper button{appearance:none;border:0;background:transparent;width:32px;height:32px;cursor:pointer;font-size:17px;line-height:1;color:var(--ink2)}
-.stepper button:hover:not(:disabled){background:var(--line2);color:var(--ink)}
-.stepper output{min-width:118px;text-align:center;font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums}
+/* cards */
+.card{overflow:hidden;border-radius:24px;background:color-mix(in oklab,var(--card) 72%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:var(--card-shadow)}
+.sec{border-top:1px solid var(--border);padding:20px}
+.sec:first-child{border-top:0}
+@media (min-width:1024px){.sec{padding:20px 24px}}
+.lbl{margin:0;font-size:13px;font-weight:500;color:var(--muted-foreground)}
+.note{font-size:12px;line-height:1.45;color:var(--faint-foreground)}
 
-/* dial */
-.dialhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
-.dialval{font-weight:600;font-size:14px;letter-spacing:-.005em}
-.link{appearance:none;border:0;background:none;padding:0;color:var(--ink3);font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-.link:hover{color:var(--ink)}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;margin:0;cursor:pointer}
-input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--stop),.9),rgba(var(--stop),.18) 46%,var(--line) 50%,rgba(var(--go),.18) 54%,rgba(var(--go),.9))}
-input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--stop),.9),rgba(var(--stop),.18) 46%,var(--line) 50%,rgba(var(--go),.18) 54%,rgba(var(--go),.9))}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);margin-top:-7px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
-input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.18)}
-input[type=range]:disabled{opacity:.5;cursor:default}
-.ends{display:flex;justify-content:space-between;font-size:12px;color:var(--ink3);margin-top:4px}
-.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--line2);border-radius:10px;padding:4px}
-.seg button{appearance:none;border:0;background:transparent;border-radius:7px;padding:7px 6px;font-size:13px;font-weight:500;color:var(--ink2);cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-details.adv{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
-details.adv summary{cursor:pointer;font-size:12.5px;color:var(--ink2);list-style:none;display:flex;align-items:center;gap:6px}
+/* choice rows */
+.choices{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.choice{display:flex;width:100%;align-items:center;gap:14px;border-radius:14px;border:1px solid color-mix(in oklab,var(--foreground) 12%,transparent);padding:13px 16px;text-align:left;transition:color .15s,background-color .15s,border-color .15s}
+.choice:hover{border-color:color-mix(in oklab,var(--foreground) 25%,transparent)}
+.choice[aria-checked="true"]{border-color:var(--foreground);box-shadow:0 0 0 .5px var(--foreground)}
+.choice:disabled{cursor:default}
+.choice .ring{width:20px;height:20px;flex-shrink:0;border-radius:50%;border:1.5px solid color-mix(in oklab,var(--foreground) 28%,transparent)}
+.choice[aria-checked="true"] .ring{border:6px solid var(--foreground)}
+.choice b{display:block;font-size:14.5px;font-weight:500}
+.choice small{display:block;font-size:13px;color:var(--muted-foreground)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+/* buttons: the filled ones are inked */
+.btn{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;gap:6px;font-weight:500;white-space:nowrap;transition:color .15s,background-color .15s,border-color .15s}
+.btn:disabled{pointer-events:none;border-color:transparent;background:var(--secondary);color:var(--faint-foreground)}
+.btn.primary{background:var(--primary);color:var(--primary-foreground);box-shadow:var(--shadow-inked)}
+.btn.primary:hover{background:color-mix(in oklab,var(--primary) 88%,transparent)}
+.btn.outline{border:1px solid color-mix(in oklab,var(--foreground) 16%,transparent);color:var(--foreground)}
+.btn.outline:hover{background:var(--secondary)}
+.btn.secondary{background:var(--secondary);color:var(--secondary-foreground)}
+.btn.secondary:hover{background:var(--accent)}
+.btn.sm{height:32px;border-radius:9px;padding:0 15px;font-size:13px}
+.btn.md{height:36px;border-radius:10px;padding:0 14px;font-size:14px}
+.btn.lg{height:46px;border-radius:12px;padding:0 20px;font-size:15px}
+.btn.xl{height:50px;border-radius:12px;padding:0 20px;font-size:15px}
+.btn.pill{height:44px;border-radius:9999px;padding:0 20px;font-size:14.5px}
+.btn.icon{width:36px;height:36px;border-radius:10px;padding:0;font-size:17px}
+.wide{width:100%}
+.stepper{display:inline-flex;align-items:center;gap:10px}
+.stepper output{min-width:122px;text-align:center;font-size:14.5px;font-weight:500;font-variant-numeric:tabular-nums}
+
+/* the slider: a 36px track, a 42px inked thumb, stops, a fill in the level's colour */
+.dialhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.dialval{font-size:15px;font-weight:600;transition:color .3s}
+.slider{position:relative;margin-top:10px;height:36px;border-radius:9999px;background:var(--secondary);touch-action:none;user-select:none}
+.slider .fill{position:absolute;top:0;bottom:0;border-radius:9999px;box-shadow:inset 0 1px 0 color-mix(in oklab,var(--spark) 30%,transparent);transition:opacity .3s ease-out;pointer-events:none}
+.slider .stopdot{position:absolute;top:50%;width:4px;height:4px;border-radius:50%;background:color-mix(in oklab,var(--foreground) 20%,transparent);transform:translate(-50%,-50%);pointer-events:none}
+.slider input{-webkit-appearance:none;appearance:none;position:absolute;inset:-3px 0;width:100%;height:42px;margin:0;background:transparent;cursor:pointer}
+.slider input:disabled{cursor:default;opacity:.6}
+.slider input::-webkit-slider-runnable-track{height:42px;background:transparent}
+.slider input::-moz-range-track{height:42px;background:transparent}
+.slider input::-webkit-slider-thumb{-webkit-appearance:none;width:42px;height:42px;border-radius:50%;background:var(--foreground);box-shadow:var(--control-shadow);transition:scale .15s}
+.slider input::-moz-range-thumb{width:42px;height:42px;border:0;border-radius:50%;background:var(--foreground);box-shadow:var(--control-shadow)}
+.ends{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--faint-foreground)}
+.link{font-size:12px;color:var(--faint-foreground);display:inline-flex;align-items:center;gap:2px}
+.link:hover{color:var(--muted-foreground)}
+
+/* segmented control */
+.seg{display:inline-flex;border-radius:9999px;background:var(--secondary);padding:4px}
+.seg.full{display:flex}
+.seg button{height:32px;flex:1;border-radius:9999px;padding:0 14px;font-size:13px;font-weight:500;color:var(--muted-foreground);white-space:nowrap;transition:color .2s,background-color .2s,box-shadow .2s}
+.seg button:hover{color:var(--foreground)}
+.seg button[aria-pressed="true"]{background:var(--control);color:var(--foreground);box-shadow:var(--control-shadow)}
+.seg button:disabled{cursor:default}
+details.adv{margin-top:14px;border-radius:16px;transition:background-color .15s}
+details.adv[open]{background:var(--control);box-shadow:var(--control-shadow);padding:4px 12px 12px}
+details.adv summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--faint-foreground);padding:6px 0}
+details.adv summary:hover{color:var(--muted-foreground)}
 details.adv summary::-webkit-details-marker{display:none}
-details.adv summary::before{content:"›";display:inline-block;transition:transform .15s;font-size:15px;line-height:1}
-details.adv[open] summary::before{transform:rotate(90deg)}
-select{background:var(--raised);border:1px solid var(--line);border-radius:9px;padding:7px 9px;width:100%;font-size:13.5px}
+details.adv summary::after{content:"";width:14px;height:14px;flex-shrink:0;background:currentColor;-webkit-mask:var(--chevron) center/contain no-repeat;mask:var(--chevron) center/contain no-repeat;transition:rotate .15s}
+details.adv[open] summary::after{rotate:180deg}
 
-/* run button */
-.go{appearance:none;width:100%;border:0;border-radius:11px;padding:12px 14px;font-weight:600;font-size:15px;cursor:pointer;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .06s,opacity .12s}
-.go:active{transform:scale(.985)} .go:disabled{opacity:.45;cursor:default}
-.go.stop{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
-.status{font-size:12.5px;color:var(--ink2);min-height:1.5em;margin-top:9px;text-align:center}
-.unlock{display:flex;gap:8px;margin-top:10px}
-.unlock input{flex:1;min-width:0;background:var(--raised);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px}
-.unlock button{appearance:none;border:1px solid var(--ink);background:var(--surface);border-radius:9px;padding:8px 13px;font-weight:600;font-size:13.5px;cursor:pointer}
+/* field */
+.field{display:flex;height:50px;flex:1;min-width:0;align-items:center;border-radius:12px;border:1px solid color-mix(in oklab,var(--foreground) 12%,transparent);background:var(--field);font-size:16px;transition:border-color .15s}
+.field:focus-within{border-color:color-mix(in oklab,var(--foreground) 55%,transparent)}
+.field input{height:100%;min-width:0;flex:1;padding:0 14px;outline:none}
+.field input::placeholder{color:var(--dim-foreground)}
+.unlock{display:flex;gap:8px;margin-top:12px}
+.status{min-height:18px;margin-top:12px;text-align:center;font-size:13px;color:var(--muted-foreground)}
 
-/* hud */
-.hud{position:sticky;top:57px;z-index:10;padding:13px 16px;display:flex;flex-direction:column;gap:10px}
-.hudtop{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.title{display:flex;flex-direction:column;min-width:0;flex:1}
-.title b{font-size:16px;font-weight:650;letter-spacing:-.01em}
-.title span{font-size:13px;color:var(--ink2)}
-.id{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
-.gauge{display:flex;align-items:center;gap:10px}
-.gauge .num{font:600 22px/1 var(--mono);font-variant-numeric:tabular-nums;min-width:3.1ch;text-align:right;letter-spacing:-.02em}
-.gbar{position:relative;width:132px;height:8px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--go),.85),rgba(var(--go),.15) 47%,rgba(var(--stop),.15) 53%,rgba(var(--stop),.9))}
-.gbar i{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--ink);left:50%;transform:translateX(-50%);transition:left .12s linear;box-shadow:0 0 0 2px var(--surface)}
-.glabels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-top:3px;letter-spacing:.02em}
-@media (max-width:640px){.hudtop{flex-direction:column;align-items:stretch;gap:9px}.gauge>div{flex:1}.gbar{width:auto}}
-.strip{display:flex;gap:3px;height:16px}
-.part{display:flex;border-radius:4px;overflow:hidden;background:var(--line2);min-width:4px;cursor:pointer}
+/* the run's header */
+.hud{position:sticky;top:68px;z-index:10;background:var(--glass-raised);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%)}
+.hudtop{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.title{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.title h2{margin:0;font-size:28px;line-height:1.1}
+.title span{font-size:13px;color:var(--muted-foreground)}
+.id{font-family:var(--font-mono);font-size:11px;color:var(--faint-foreground)}
+.gauge{display:flex;align-items:center;gap:12px}
+.gauge .num{font-size:28px;line-height:1;min-width:2.9ch;text-align:right}
+.gbar{position:relative;width:150px;height:6px;border-radius:9999px;background:linear-gradient(90deg,var(--go),color-mix(in oklab,var(--go) 16%,transparent) 47%,color-mix(in oklab,var(--stop) 16%,transparent) 53%,var(--stop))}
+.gbar i{position:absolute;top:50%;left:50%;width:14px;height:14px;border-radius:50%;background:var(--foreground);box-shadow:var(--control-shadow);transform:translate(-50%,-50%);transition:left .12s linear}
+.glabels{display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:var(--faint-foreground)}
+@media (min-width:1024px){.hud{top:92px}}
+@media (max-width:640px){.hudtop{flex-direction:column;align-items:stretch;gap:12px}.gauge>div{flex:1}.gbar{width:auto}.title h2{font-size:24px}}
+.strip{display:flex;gap:3px;height:14px;margin-top:14px}
+.part{display:flex;border-radius:4px;overflow:hidden;background:var(--secondary);min-width:4px;cursor:pointer}
 .part i{flex:1 1 0;min-width:0}
-.part.final{outline:1.5px solid var(--ink);outline-offset:1px}
+.part.final{box-shadow:0 0 0 1.5px var(--foreground)}
 
-/* transcript */
-.intro h1{font-size:26px;line-height:1.2;letter-spacing:-.022em;margin:0 0 8px;font-weight:700;text-wrap:balance}
-.intro p{margin:0;color:var(--ink2);max-width:62ch}
-.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:13px;color:var(--ink2)}
-.sw{display:inline-block;width:22px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:6px}
-.sw.s{background:rgba(var(--stop),.85)} .sw.g{background:rgba(var(--go),.8)}
-.feed{display:flex;flex-direction:column;gap:10px}
-.msg{padding:13px 15px;min-width:0}
-.who{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px}
-.who .tool{font-family:var(--mono);text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--ink2);background:var(--line2);border-radius:6px;padding:1px 7px}
-.msg.agent{margin-right:7%} .msg.result{margin-left:7%;background:var(--raised)} .msg.user{background:var(--raised)}
-.msg.final{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
-@media (max-width:640px){.msg.agent{margin-right:0}.msg.result{margin-left:0}}
-.plain{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px}
-.tok{font:12.5px/1.95 var(--mono);white-space:break-spaces;overflow-wrap:anywhere;min-height:1.95em}
-.tok span{border-radius:4px;padding:2.5px 0}
-.tok.writing::after{content:"";display:inline-block;width:6px;height:1.05em;margin-left:2px;vertical-align:-2px;background:var(--ink);border-radius:1px;animation:blink 1s steps(2) infinite}
-@keyframes blink{50%{opacity:0}}
-.clamp{max-height:238px;overflow:hidden;position:relative}  /* shows the end of a long result, where the evidence is */
-.clamp::before{content:"";position:sticky;display:block;top:0;height:40px;margin-bottom:-40px;background:linear-gradient(var(--raised),transparent);pointer-events:none;z-index:1}
-.more{appearance:none;border:0;background:none;color:var(--ink2);font-size:12.5px;font-weight:500;cursor:pointer;padding:6px 0 0;text-decoration:underline;text-underline-offset:2px}
-.decide{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink2);padding:1px 4px}
-.decide::before{content:"";width:14px;height:1px;background:var(--line)}
-.pill{font:500 12px/1.6 var(--mono);border-radius:999px;padding:0 9px;color:var(--ink);font-variant-numeric:tabular-nums;background:var(--line2)}
-.truth{font-size:12px;color:var(--ink3)}
-.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);overflow:hidden}
-.sum div{background:var(--surface);padding:13px 15px;display:flex;flex-direction:column;gap:2px}
-.sum b{font-size:17px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
-.sum span{font-size:12px;color:var(--ink3)}
-@media (max-width:640px){.sum{grid-template-columns:1fr 1fr}}
-.jump{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;appearance:none;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:600;font-size:13px;padding:9px 16px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+/* intro */
+.intro h1{margin:0 0 12px;font-size:38px;line-height:1.02;text-wrap:balance}
+@media (min-width:1024px){.intro h1{font-size:46px}}
+.intro p{font-size:15.5px;line-height:1.5;color:var(--subtle-foreground);max-width:60ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;font-size:13px;color:var(--muted-foreground)}
+.sw{display:inline-block;width:20px;height:10px;border-radius:3px;margin-right:7px;vertical-align:0}
+.sw.s{background:var(--stop)} .sw.g{background:var(--go)}
+
+/* the transcript, as a chat: the person's message in a bubble, the agent's work as editor cards */
+.feed{display:flex;flex-direction:column;gap:12px}
+.user{max-width:80%;align-self:flex-end;border-radius:18px;background:var(--secondary);padding:10px 14px;font-size:14px;line-height:1.5;letter-spacing:-.005em;white-space:pre-wrap;overflow-wrap:anywhere}
+@media (max-width:640px){.user{max-width:88%;border-radius:16px 16px 4px 16px;padding:10px 12px}}
+.isle{display:flex;min-width:0;flex-direction:column;overflow:hidden;border-radius:8px;background:var(--island);box-shadow:var(--island-shadow);max-width:88%;align-self:flex-start;width:100%}
+.isle.result{align-self:flex-end}
+@media (max-width:640px){.isle{max-width:100%}}
+.isle .top{display:flex;align-items:center;gap:4px;border-bottom:1px solid color-mix(in oklab,var(--island-foreground) 10%,transparent);padding:6px 10px}
+.isle .top i{width:5px;height:5px;border-radius:50%;background:color-mix(in oklab,var(--island-foreground) 25%,transparent)}
+.isle .top span{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:10px;line-height:1;color:color-mix(in oklab,var(--island-foreground) 60%,transparent)}
+.tok{margin:0;padding:8px 12px;font-family:var(--font-mono);font-size:12px;line-height:1.75;color:color-mix(in oklab,var(--island-foreground) 85%,transparent);white-space:break-spaces;overflow-wrap:anywhere;min-height:35px}
+.tok span{border-radius:3px;padding:2px 0}
+.isle.result .tok{max-height:224px;overflow:auto;scrollbar-width:thin;scrollbar-color:color-mix(in oklab,var(--island-foreground) 20%,transparent) transparent}
+.isle.result .tok.open{max-height:none}
+.tok.writing::after{content:"";display:inline-block;width:5px;height:12px;margin-left:1px;transform:translateY(1px);background:color-mix(in oklab,var(--island-foreground) 70%,transparent);animation:caret 1.05s steps(1) infinite}
+@keyframes caret{50%{opacity:0}}
+.isle .foot{display:flex;justify-content:flex-end;border-top:1px solid color-mix(in oklab,var(--island-foreground) 10%,transparent);padding:4px 10px}
+.answer{max-width:88%;align-self:flex-start;display:flex;flex-direction:column;gap:6px}
+.answer .lbl{font-size:12px}
+.answer .tok{padding:2px 2px 4px;font-family:var(--font-sans);font-size:14px;line-height:1.75;letter-spacing:-.005em;color:var(--foreground);min-height:0}
+.decide{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted-foreground);padding:0 2px}
+.pill{border-radius:9999px;background:var(--secondary);padding:2px 9px;font-family:var(--font-mono);font-size:11px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--foreground)}
+.truth{color:var(--faint-foreground)}
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.sum div{display:flex;flex-direction:column;gap:3px;border-left:1px solid var(--border);padding:18px 20px}
+.sum div:first-child{border-left:0}
+.sum b{font-size:15px;font-weight:600}
+.sum span{font-size:12px;color:var(--muted-foreground)}
+@media (max-width:640px){.sum{grid-template-columns:1fr 1fr}.sum div:nth-child(3){border-left:0}.sum div:nth-child(n+3){border-top:1px solid var(--border)}}
+.jump{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:40}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
-footer{max-width:1180px;margin:0 auto;padding:0 20px 34px;font-size:12px;color:var(--ink3)}
-footer a{color:inherit}
+footer{padding:64px 2px 36px;font-size:12px;color:var(--faint-foreground)}
 </style>
 </head>
 <body>
-<div class="bar"><div>
-  <span class="brand"><span class="mark"><i></i><i></i></span>Stop Signal</span>
-  <span class="tag">watching an agent decide when to stop</span>
-  <span class="chip" id="chip"><span class="dot"></span><span id="chiptext">connecting</span></span>
-</div></div>
+<header class="bar">
+  <span class="brand lab-display">Stop Signal</span>
+  <span class="tagline">watching an agent decide when to stop</span>
+  <span class="chip" id="chip"><span class="dot"></span><span id="chiptext">Connecting</span></span>
+</header>
 
 <div class="shell">
   <aside class="side">
-    <div class="card pad">
-      <p class="label">Task</p>
-      <div class="kinds" id="kinds"></div>
-      <div class="row" style="margin-top:12px">
-        <span class="small muted">Size</span>
-        <span class="stepper"><button id="less" aria-label="Smaller">−</button><output id="size"></output><button id="more" aria-label="Larger">+</button></span>
+    <div class="card">
+      <div class="settings">
+      <section class="sec">
+        <h2 class="lbl" id="task-label">Task</h2>
+        <div class="choices" id="kinds" role="radiogroup" aria-labelledby="task-label"></div>
+        <div class="row" style="margin-top:16px">
+          <span class="lbl">Size</span>
+          <span class="stepper"><button class="btn secondary icon" id="less" aria-label="Smaller">−</button><output id="size"></output><button class="btn secondary icon" id="more" aria-label="Larger">+</button></span>
+        </div>
+      </section>
+      <section class="sec">
+        <div class="dialhead"><h2 class="lbl" id="push-label">Push</h2><span class="dialval" id="dialval">Neutral</span><span style="display:flex;justify-content:flex-end"><button class="link" id="reset" hidden>reset</button></span></div>
+        <div id="dial-live">
+          <div class="slider" id="slider"><span class="fill" id="fill"></span><input type="range" id="push" min="-2" max="2" step="0.25" value="0" aria-labelledby="push-label"></div>
+          <div class="ends"><span>stop sooner</span><span>keep going</span></div>
+          <details class="adv"><summary>How the push is applied</summary>
+            <div class="seg full" id="where" role="group" aria-label="Where the push is applied" style="margin-top:4px"><button data-v="all" aria-pressed="true">Every token</button><button data-v="start">First token of a turn</button></div>
+            <p class="note" style="margin-top:10px">It adds one direction to the model's layer 23. 1× is the gap between an average stop turn and an average tool-call turn. On eight test tasks needing six tool calls, the agent made 5.8 with no push, 3.2 at 1× stop sooner, 0.5 at 2×, and 11.6 at 1× keep going.</p>
+          </details>
+        </div>
+        <div id="dial-replay" hidden>
+          <div class="seg full" id="seg" role="group" aria-label="Recorded push settings" style="margin-top:10px"></div>
+          <p class="note" style="margin-top:12px">Recorded runs come at three settings, picked as clear examples. Live runs use a fresh task and the full dial, and vary more.</p>
+        </div>
+      </section>
       </div>
-    </div>
-
-    <div class="card pad">
-      <div class="dialhead"><p class="label" style="margin:0">Push</p><span class="dialval" id="dialval">Neutral</span></div>
-      <div id="dial-live">
-        <input type="range" id="push" min="-2" max="2" step="0.25" value="0" aria-label="Push the agent to stop sooner or keep going">
-        <div class="ends"><span>stop sooner</span><button class="link" id="reset" hidden>reset</button><span>keep going</span></div>
-        <details class="adv"><summary>How the push is applied</summary>
-          <div style="margin-top:9px"><select id="where" aria-label="Where the push is applied"><option value="all">At every token the agent writes</option><option value="start">Only at the first token of each turn</option></select></div>
-          <p class="tiny" style="margin:9px 0 0">It adds one direction to the model's layer 23. 1× is the gap between an average stop turn and an average tool-call turn. On eight test tasks needing six tool calls, the agent made 5.8 with no push, 3.2 at 1× stop sooner, 0.5 at 2×, and 11.6 at 1× keep going.</p>
-        </details>
-      </div>
-      <div id="dial-replay" hidden>
-        <div class="seg" id="seg" role="group" aria-label="Recorded push settings"></div>
-        <p class="tiny" style="margin:10px 0 0">Recorded runs come at three settings, picked as clear examples. Live runs use a fresh task and the full dial, and vary more.</p>
-      </div>
-    </div>
-
-    <div class="card pad">
-      <button class="go" id="run" disabled>Run</button>
-      <div class="status" id="status" role="status" aria-live="polite">connecting…</div>
-      <div id="lock" hidden>
-        <p class="tiny" style="margin:12px 0 0">You are watching recorded runs. With a passcode the agent runs live on a GPU, on a fresh task each time.</p>
-        <form class="unlock" id="unlock"><input type="password" id="key" placeholder="Passcode" autocomplete="off" aria-label="Passcode"><button>Unlock</button></form>
-      </div>
-      <div id="golive" hidden><p class="tiny" style="margin:10px 0 0;text-align:center"><button class="link" id="backlive">Back to live mode</button></p></div>
-      <div id="unlocked" hidden><p class="tiny" style="margin:10px 0 0;text-align:center">Live mode. <button class="link" id="replaymode">Watch recorded runs instead</button> · <button class="link" id="forget">forget passcode</button></p></div>
-      <div id="speedrow" class="row" style="margin-top:10px" hidden><span class="tiny">Replay speed</span><div class="seg" id="speed" style="width:150px"><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button><button data-v="4">4×</button></div></div>
+      <section class="sec">
+        <button class="btn primary lg wide" id="run" disabled>Run</button>
+        <div class="status" id="status" role="status" aria-live="polite">Connecting…</div>
+        <div id="lock" hidden>
+          <p class="note" style="margin-top:14px">You are watching recorded runs. With a passcode the agent runs live on a GPU, on a fresh task each time.</p>
+          <form class="unlock" id="unlock"><label class="field"><input type="password" id="key" placeholder="Passcode" autocomplete="off" aria-label="Passcode"></label><button class="btn secondary xl">Unlock</button></form>
+        </div>
+        <div id="golive" hidden><p class="note" style="margin-top:12px;text-align:center"><button class="link" id="backlive">Back to live mode</button></p></div>
+        <div id="unlocked" hidden><p class="note" style="margin-top:12px;text-align:center">Live mode. <button class="link" id="replaymode">Watch recorded runs</button> · <button class="link" id="forget">forget passcode</button></p></div>
+        <div id="speedrow" class="row" style="margin-top:14px" hidden><span class="lbl">Replay speed</span><div class="seg" id="speed" role="group" aria-label="Replay speed"><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button><button data-v="4">4×</button></div></div>
+      </section>
     </div>
   </aside>
 
   <main class="main">
-    <section class="card pad intro" id="intro">
-      <h1>Watch an AI agent decide when to stop</h1>
+    <section class="card intro" id="intro"><div class="sec">
+      <h1 class="lab-display">Watch an AI agent decide when to stop</h1>
       <p>An agent (Qwen3-4B) gets a small job and a set of tools. It calls one tool at a time, reads each result, and at some point writes a final answer. Every word is coloured by a score read from inside the model at that moment.</p>
-      <div class="legend"><span><span class="sw g"></span>blue: its next turn will call another tool</span><span><span class="sw s"></span>orange: its next turn will be the final answer</span></div>
-    </section>
-    <section class="card hud" id="hud" hidden>
+      <div class="legend"><span><span class="sw g"></span>blue: its next turn will call another tool</span><span><span class="sw s"></span>amber: its next turn will be the final answer</span></div>
+    </div></section>
+    <section class="card hud" id="hud" hidden><div class="sec">
       <div class="hudtop">
-        <div class="title"><b id="t-name"></b><span id="t-sub"></span></div>
-        <div>
-          <div class="gauge"><div><div class="gbar"><i id="needle"></i></div><div class="glabels"><span>tool call</span><span>stop</span></div></div><span class="num" id="now">–</span></div>
-        </div>
+        <div class="title"><h2 class="lab-display" id="t-name"></h2><span id="t-sub"></span></div>
+        <div class="gauge"><div><div class="gbar"><i id="needle"></i></div><div class="glabels"><span>tool call</span><span>stop</span></div></div><span class="num lab-display" id="now">–</span></div>
       </div>
       <div class="strip" id="strip" title="The whole run, one block per turn. Click a block to jump to it."></div>
-    </section>
+    </div></section>
     <div class="feed" id="feed"></div>
+    <footer>Qwen3-4B with four real tools on a generated workspace. The score is a linear read-out at layer 24, averaged over the last four tokens. Research demo.</footer>
   </main>
 </div>
-<button class="jump" id="jump" hidden>Jump to latest ↓</button>
-<footer>Qwen3-4B with four real tools on a generated workspace. The score is a linear read-out at layer 24, averaged over the last four tokens. Research demo.</footer>
+<button class="btn primary pill jump" id="jump" hidden>Jump to latest ↓</button>
 
 <script>
 // Where the live agent is. On this machine's own server the page talks to the same origin; anywhere
@@ -234,12 +294,19 @@ const KINDS = {
 };
 const ENDS = {finished: "Finished the work, then stopped", plan: "Announced a next step and stopped", early: "Answered with work left", cap: "Never stopped"};
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const color = p => p >= .5 ? `rgba(var(--stop),${Math.min(.92, (p - .5) * 2.1 + .07).toFixed(2)})` : `rgba(var(--go),${Math.min(.88, (.5 - p) * 1.9 + .05).toFixed(2)})`;
+// A score as a tint of the theme's chart colours: amber toward stop, blue toward another tool call.
+// The words take whichever of the theme's inks reads best on that tint: light until the fill is
+// bright, then the dark ink. The switch points are where the two cross (4.3:1 there, more elsewhere).
+function paint(el, p, words = true) {
+  const stop = p >= .5, a = stop ? Math.min(.92, (p - .5) * 2.1 + .07) : Math.min(.88, (.5 - p) * 1.9 + .05);
+  el.style.background = `color-mix(in oklab, var(--${stop ? "stop" : "go"}) ${Math.round(a * 100)}%, transparent)`;
+  if (words) el.style.color = a > (stop ? .54 : .62) ? "var(--ink)" : "var(--foreground)";
+}
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const pushText = v => v === 0 ? "Neutral" : `${Math.abs(v)}× ${v > 0 ? "keep going" : "stop sooner"}`;
 
 const S = {mode: "connecting", key: null, sizes: {batch: [2, 12], dirscan: [2, 12], chain: [2, 12], fix: [1, 4]}, kind: "batch",
-           size: {batch: 4, dirscan: 5, chain: 4, fix: 2}, push: 0, running: false, abort: null, runId: null, lib: null, speed: 1, info: {}};
+           size: {batch: 4, dirscan: 5, chain: 4, fix: 2}, push: 0, where: "all", running: false, abort: null, runId: null, lib: null, speed: 1, info: {}};
 let queue = [], cur = null, fast = false, follow = true, lastFrame = 0, replayTimer = null;
 
 // ---------------------------------------------------------------- talking to the server
@@ -262,7 +329,7 @@ async function connect() {
 }
 async function tryKey(key) {
   try { const s = await getJSON("/api/check", key); S.key = key; if (s.sizes) S.sizes = s.sizes; S.info = s; try { localStorage.setItem("stop-signal-key", key); } catch (e) {} setMode("remote"); return true; }
-  catch (e) { return false; }
+  catch (e) { if (e.status === 401) { try { localStorage.removeItem("stop-signal-key"); } catch (x) {} } return false; }
 }
 async function library() {
   if (!S.lib) { try { S.lib = (await (await fetch("runs.json", {cache: "no-store"})).json()).runs; } catch (e) { S.lib = []; } }
@@ -281,19 +348,29 @@ function setMode(mode) {
   if (mode === "replay") library().then(() => { syncReplay(); render(); });
   render();
 }
+function paintDial() {  // the fill runs from the middle to the thumb, in the colour of the side it is on
+  const t = (S.push + 2) / 4, at = `(21px + (100% - 42px) * ${t})`, mid = "(21px + (100% - 42px) * 0.5)", fill = $("fill");
+  const c = S.push < 0 ? "var(--stop)" : "var(--go)";
+  fill.style.opacity = S.push === 0 ? 0 : 1;
+  fill.style.left = `calc(${S.push < 0 ? at : mid} - 18px)`;
+  fill.style.right = `calc(100% - ${S.push < 0 ? mid : at} - 18px)`;
+  fill.style.background = `linear-gradient(${S.push < 0 ? 270 : 90}deg, color-mix(in oklab, ${c} 70%, transparent), ${c})`;
+  $("dialval").style.color = S.push === 0 ? "" : c;
+}
 function render() {
   const live = S.mode === "local" || S.mode === "remote", k = S.kind, [lo, hi] = S.sizes[k];
-  document.querySelectorAll(".kind").forEach(b => { b.setAttribute("aria-pressed", b.dataset.k === k); b.disabled = S.running; });
+  document.querySelectorAll(".choice").forEach(b => { b.setAttribute("aria-checked", b.dataset.k === k); b.disabled = S.running; });
   let n = Math.min(hi, Math.max(lo, S.size[k]));
   if (S.mode === "replay" && S.lib) { const r = S.lib.find(r => r.type === k); if (r) n = r.length; }
   S.size[k] = n;
   $("size").textContent = KINDS[k].size(n);
   $("less").disabled = S.running || !live || n <= lo; $("more").disabled = S.running || !live || n >= hi;
-  $("push").disabled = $("where").disabled = S.running; $("push").value = S.push;
-  $("dialval").textContent = pushText(S.push); $("reset").hidden = S.push === 0 || S.running;
+  $("push").disabled = S.running; $("push").value = S.push;
+  $("dialval").textContent = pushText(S.push); $("reset").hidden = S.push === 0 || S.running || !live; paintDial();
   document.querySelectorAll("#seg button").forEach(b => { b.setAttribute("aria-pressed", +b.dataset.v === S.push); b.disabled = S.running; });
+  document.querySelectorAll("#where button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === S.where); b.disabled = S.running; });
   const run = $("run");
-  run.className = "go" + (S.running ? " stop" : ""); run.textContent = S.running ? "Stop" : S.mode === "replay" ? "Play recorded run" : "Run";
+  run.className = "btn lg wide " + (S.running ? "outline" : "primary"); run.textContent = S.running ? "Stop" : S.mode === "replay" ? "Play recorded run" : "Run";
   run.disabled = !(S.running || live || (S.mode === "replay" && S.lib && S.lib.length));
   if (!S.running && !cur) status(live ? (S.mode === "remote" ? "A fresh task each time. The first run may wait a minute for the GPU." : "Ready. A fresh task each time.")
     : S.mode === "replay" ? (S.lib && !S.lib.length ? "No recorded runs are available." : "Recorded on a GPU, replayed as it happened.") : S.mode === "waking" ? "Starting a GPU and loading the model…" : "Connecting…");
@@ -304,12 +381,14 @@ function syncReplay() {  // the dial settings that exist for the chosen task
   $("seg").innerHTML = opts.map(v => `<button data-v="${v}">${v === 0 ? "Neutral" : v < 0 ? "Stop sooner" : "Keep going"}</button>`).join("");
 }
 const status = s => { $("status").textContent = s; };
-$("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="kind" data-k="${k}"><b>${v.name}</b><span>${v.blurb}</span></button>`).join("");
-$("kinds").onclick = e => { const b = e.target.closest(".kind"); if (!b || S.running) return; S.kind = b.dataset.k; if (S.mode === "replay") syncReplay(); render(); };
+$("kinds").innerHTML = Object.entries(KINDS).map(([k, v]) => `<button class="choice" type="button" role="radio" data-k="${k}"><span class="ring" aria-hidden="true"></span><span><b>${v.name}</b><small>${v.blurb}</small></span></button>`).join("");
+$("slider").insertAdjacentHTML("afterbegin", [0, 1, 2, 3, 4].map(i => `<span class="stopdot" style="left:calc(21px + (100% - 42px) * ${i / 4})"></span>`).join(""));
+$("kinds").onclick = e => { const b = e.target.closest(".choice"); if (!b || S.running) return; S.kind = b.dataset.k; if (S.mode === "replay") syncReplay(); render(); };
 $("less").onclick = () => { S.size[S.kind]--; render(); }; $("more").onclick = () => { S.size[S.kind]++; render(); };
 $("push").oninput = e => { S.push = +e.target.value; render(); };
 $("reset").onclick = () => { S.push = 0; render(); };
 $("seg").onclick = e => { const b = e.target.closest("button"); if (b && !S.running) { S.push = +b.dataset.v; render(); } };
+$("where").onclick = e => { const b = e.target.closest("button"); if (b && !S.running) { S.where = b.dataset.v; render(); } };
 $("speed").onclick = e => { const b = e.target.closest("button"); if (!b) return; S.speed = +b.dataset.v; document.querySelectorAll("#speed button").forEach(x => x.setAttribute("aria-pressed", x === b)); };
 $("unlock").onsubmit = async e => { e.preventDefault(); const k = $("key").value.trim(); if (!k) return; status("Checking…"); if (!(await tryKey(k))) { status("That passcode was not accepted."); $("key").select(); } else $("key").value = ""; };
 $("forget").onclick = () => { try { localStorage.removeItem("stop-signal-key"); } catch (e) {} S.key = null; setMode("replay"); };
@@ -318,52 +397,55 @@ $("backlive").onclick = () => setMode("remote");
 
 // ---------------------------------------------------------------- drawing a run
 function addTok(s, p) {
-  const span = el("span"); span.dataset.p = p; span.style.background = color(p); span.textContent = s.replace(/\n/g, "↵\n");
+  const span = el("span"); span.dataset.p = p; paint(span, p); span.textContent = s.replace(/\n/g, "↵\n");
   cur.box.appendChild(span);
-  const i = el("i"); i.style.background = color(p); cur.part.appendChild(i); cur.part.style.flex = `${cur.part.childElementCount} 1 0`;
+  const i = el("i"); paint(i, p, false); cur.part.appendChild(i); cur.part.style.flex = `${cur.part.childElementCount} 1 0`;
   $("now").textContent = p.toFixed(2); $("needle").style.left = (4 + p * 92) + "%";
-  if (cur.clamp && cur.box.scrollHeight > 250 && !cur.box.dataset.open) {
-    cur.box.classList.add("clamp"); cur.box.scrollTop = cur.box.scrollHeight;
-    if (!cur.moreBtn) {
-      const b = el("button", "more", "Show all"), box = cur.box;
-      b.onclick = () => { const clamped = box.classList.toggle("clamp"); box.dataset.open = clamped ? "" : "1"; b.textContent = clamped ? "Show all" : "Show less"; if (clamped) box.scrollTop = box.scrollHeight; };
-      box.after(b); cur.moreBtn = b;
+  if (cur.scrolls && !cur.box.classList.contains("open")) {  // a long result shows its end, where the evidence is
+    cur.box.scrollTop = cur.box.scrollHeight;
+    if (!cur.moreBtn && cur.box.scrollHeight > cur.box.clientHeight + 4) {
+      const foot = el("div", "foot"), b = el("button", "link", "Show all"), box = cur.box;
+      b.onclick = () => { const open = box.classList.toggle("open"); b.textContent = open ? "Show less" : "Show all"; if (!open) box.scrollTop = box.scrollHeight; };
+      foot.appendChild(b); box.after(foot); cur.moreBtn = b;
     }
   }
 }
 function settle(text) { if (cur && cur.pending) { cur.pending.textContent = text; cur.pending = null; } }
+const isle = (cls, label) => el("div", "isle " + cls, `<div class="top"><i></i><i></i><i></i><span>${esc(label)}</span></div><pre class="tok"></pre>`);
 const H = {
   queued() { status("Waiting for the GPU…"); },
   start(e) {
     $("feed").innerHTML = ""; $("strip").innerHTML = ""; $("intro").hidden = true; $("hud").hidden = false;
-    cur = {id: e.id, step: null, box: null, part: null, pending: null, n: 0,
+    cur = {id: e.id, box: null, part: null, pending: null,
            push: e.push ? `Pushed ${pushText(e.push).toLowerCase()}${e.every_token ? "" : ", first token only"}.` : ""};
     $("t-name").textContent = KINDS[e.type].title;
     $("t-sub").innerHTML = `<span id="outcome">${S.mode === "replay" ? "Replaying a recorded run." : "Running now."}</span> ${esc(cur.push)} <span class="id">${esc(e.id)}</span>`;
     $("now").textContent = "–"; $("needle").style.left = "50%";
-    $("feed").appendChild(el("div", "card msg user", `<div class="who">Request</div><div class="plain">${esc(e.request)}</div>`));
+    $("feed").appendChild(el("div", "user", esc(e.request)));
     status(S.mode === "replay" ? "Replaying…" : "The agent is working…");
   },
   decide(e) {
-    const row = el("div", "decide", `<span>${e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill" style="background:${color(e.p)}">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.truth.done ? "the work is in fact done" : "work in fact remains"}</span>`);
+    const row = el("div", "decide", `<span>${e.turn === 0 ? "Stop score before the first turn" : "Stop score after reading that"}</span><span class="pill">${e.p.toFixed(2)}</span><span class="what">…</span><span class="truth" title="Checked by the test harness, which knows what the task needs">${e.truth.done ? "· the work is in fact done" : "· work in fact remains"}</span>`);
+    paint(row.querySelector(".pill"), e.p);
     $("feed").appendChild(row); cur.pending = row.querySelector(".what");
   },
   turn(e) {
-    const id = "turn" + e.turn, block = el("div", "card msg agent", `<div class="who">Agent · turn ${e.turn + 1}</div><div class="tok writing"></div>`);
+    const id = "turn" + e.turn, block = isle("call", `agent · turn ${e.turn + 1}`);
     block.id = id; $("feed").appendChild(block);
-    cur.block = block; cur.box = block.querySelector(".tok"); cur.clamp = false; cur.moreBtn = null;
+    cur.block = block; cur.box = block.querySelector(".tok"); cur.box.classList.add("writing"); cur.scrolls = false; cur.moreBtn = null;
     cur.part = el("div", "part"); cur.part.dataset.s = id; cur.part.style.flex = "1 1 0"; $("strip").appendChild(cur.part);
   },
   tok(e) { addTok(e.s, e.p); return 1; },
   endturn(e) {
     cur.box.classList.remove("writing");
-    if (e.next === "stop") {
+    if (e.next === "stop") {  // not a tool call after all: it is speech, so it leaves the editor card
       settle("→ it stops");
-      cur.block.classList.add("final"); cur.block.querySelector(".who").textContent = "Agent · final answer"; cur.part.classList.add("final");
+      const said = el("div", "answer", `<span class="lbl">Final answer</span>`), box = cur.box;
+      box.className = "tok"; said.id = cur.block.id; said.appendChild(box); cur.block.replaceWith(said); cur.block = said; cur.part.classList.add("final");
     } else {
       settle("→ it calls another tool");
-      const block = el("div", "card msg result", `<div class="who">Tool result <span class="tool">${esc(e.tool)}</span></div><div class="tok"></div>`);
-      $("feed").appendChild(block); cur.box = block.querySelector(".tok"); cur.clamp = true; cur.moreBtn = null;
+      const block = isle("result", `tool result · ${e.tool}`);
+      $("feed").appendChild(block); cur.box = block.querySelector(".tok"); cur.scrolls = true; cur.moreBtn = null;
     }
   },
   result(e) { queue.unshift(...e.toks.map(t => ({t: "rtok", s: t[0], p: t[1]}))); },
@@ -373,7 +455,7 @@ const H = {
     if (e.end === "cap" && cur.box && !cur.box.childElementCount) cur.box.textContent = "(the turn limit was reached before the agent read this result)";
     const verdict = e.end === "cap" ? "Hit the turn limit" : e.end !== "finished" ? "Work was left undone" : e.correct ? "Right answer" : "Wrong answer";
     $("outcome").textContent = ENDS[e.end] + ".";
-    $("feed").appendChild(el("div", "card sum", `<div><b>${ENDS[e.end].split(",")[0]}</b><span>how it ended</span></div><div><b>${verdict}</b><span>checked by the harness</span></div><div><b>${e.calls} <span style="font-weight:400;font-size:13px">of ${e.needed} needed</span></b><span>tool calls</span></div><div><b>${e.seconds.toFixed(0)} s</b><span>${e.tps.toFixed(0)} tokens a second</span></div>`));
+    $("feed").appendChild(el("div", "card sum", `<div><b>${ENDS[e.end].split(",")[0]}</b><span>how it ended</span></div><div><b>${verdict}</b><span>checked by the harness</span></div><div><b>${e.calls} of ${e.needed} needed</b><span>tool calls</span></div><div><b>${e.seconds.toFixed(0)} s</b><span>${e.tps.toFixed(0)} tokens a second</span></div>`));
     finish("Done.");
   },
   cancelled() { if (cur && cur.box) cur.box.classList.remove("writing"); settle("stopped by you"); const o = $("outcome"); if (o) o.textContent = "Stopped by you."; finish("Stopped."); },
@@ -390,12 +472,12 @@ setInterval(() => { if (performance.now() - lastFrame > 400) drain(true); }, 200
 
 // ---------------------------------------------------------------- running
 async function runLive() {
-  const q = new URLSearchParams({type: S.kind, length: S.size[S.kind], push: S.push, where: $("where").value});
+  const q = new URLSearchParams({type: S.kind, length: S.size[S.kind], push: S.push, where: S.where});
   S.abort = new AbortController();
   try {
     const r = await fetch(`${base()}/api/run?${q}`, {headers: headers(), signal: S.abort.signal, cache: "no-store"});
     if (r.status === 401) return queue.push({t: "error", msg: "locked"});
-    if (!r.ok) return queue.push({t: "error", msg: (await r.json().catch(() => ({}))).error || "the server said " + r.status});
+    if (!r.ok) return queue.push({t: "error", msg: (await r.json().catch(() => ({}))).detail || "the server said " + r.status});
     const reader = r.body.getReader(), dec = new TextDecoder();
     let buf = "";
     for (;;) {
@@ -434,7 +516,7 @@ $("run").onclick = () => {
 
 // ---------------------------------------------------------------- reading along
 document.addEventListener("mouseover", e => { const s = e.target.closest(".tok span"); if (s && !S.running) { $("now").textContent = (+s.dataset.p).toFixed(2); $("needle").style.left = (4 + s.dataset.p * 92) + "%"; } });
-$("strip").onclick = e => { const p = e.target.closest(".part"); if (p) { follow = false; $("jump").hidden = !S.running; $(p.dataset.s).scrollIntoView({behavior: "smooth", block: "start"}); } };
+$("strip").onclick = e => { const p = e.target.closest(".part"); if (p) { follow = false; $("jump").hidden = !S.running; window.scrollTo({top: $(p.dataset.s).getBoundingClientRect().top + scrollY - $("hud").getBoundingClientRect().bottom - 12, behavior: "smooth"}); } };
 window.addEventListener("wheel", e => { if (e.deltaY < 0 && S.running) { follow = false; $("jump").hidden = false; } }, {passive: true});
 window.addEventListener("touchmove", () => { if (S.running && window.innerHeight + window.scrollY < document.documentElement.scrollHeight - 80) { follow = false; $("jump").hidden = false; } }, {passive: true});
 $("jump").onclick = () => { follow = true; $("jump").hidden = true; window.scrollTo({top: document.documentElement.scrollHeight, behavior: "smooth"}); };
