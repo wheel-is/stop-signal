@@ -108,6 +108,7 @@ select{background:var(--raised);border:1px solid var(--line);border-radius:9px;p
 .gbar{position:relative;width:132px;height:8px;border-radius:999px;background:linear-gradient(90deg,rgba(var(--go),.85),rgba(var(--go),.15) 47%,rgba(var(--stop),.15) 53%,rgba(var(--stop),.9))}
 .gbar i{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--ink);left:50%;transform:translateX(-50%);transition:left .12s linear;box-shadow:0 0 0 2px var(--surface)}
 .glabels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-top:3px;letter-spacing:.02em}
+@media (max-width:640px){.hudtop{flex-direction:column;align-items:stretch;gap:9px}.gauge>div{flex:1}.gbar{width:auto}}
 .strip{display:flex;gap:3px;height:16px}
 .part{display:flex;border-radius:4px;overflow:hidden;background:var(--line2);min-width:4px;cursor:pointer}
 .part i{flex:1 1 0;min-width:0}
